@@ -11,17 +11,18 @@ describe('community marketplace kefir donor contract', () => {
   });
 
   test('forces kefir cultures to remain free donations', () => {
-    expect(routes).toContain("category === 'kefir_culture_donation' && normalizedCurrency !== 'FREE'");
-    expect(routes).toContain('dono gratuito');
+    expect(routes).toMatch(/category==='kefir_culture_donation'\s*&&\s*normalizedCurrency!=='FREE'/);
+    expect(routes).toContain('solo come dono gratuito');
   });
 
   test('requires type and safety acknowledgement', () => {
-    expect(routes).toContain("['milk','water'].includes(kefir?.type)");
-    expect(routes).toContain("kefir?.safetyAcknowledged !== true");
+    expect(routes).toMatch(/\['milk','water'\]\.includes\(kefir\?\.type\)/);
+    expect(routes).toMatch(/kefir\?\.safetyAcknowledged\s*!==\s*true/);
   });
 
-  test('keeps the donor path outside paid seller membership', () => {
-    expect(routes).toContain("const donationOnly = requestedCategory === 'kefir_culture_donation'");
-    expect(routes).toContain('const membership = donationOnly ? true : await activeSeller');
+  test('keeps free kefir donations outside Seller membership', () => {
+    expect(routes).toMatch(/category==='kefir_culture_donation'\s*&&\s*normalized==='FREE'/);
+    expect(routes).toContain('const communityExchange=isCommunityExchange(requestedCategory,requestedCurrency)');
+    expect(routes).toContain('if(!communityExchange)');
   });
 });
