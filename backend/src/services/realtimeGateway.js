@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const VirtualSession = require('../models/VirtualSession');
 const CommunityMembership = require('../models/CommunityMembership');
 
@@ -60,10 +61,24 @@ async function authorizeChannel({ channel, userId, role = 'user' }) {
 
   if (kind === 'community') {
     if (role === 'admin') return { allowed: true, channel: normalized };
-    const membership = await CommunityMembership.findOne({ communityId: id, userId: String(userId), status: 'active' }).lean();
-    return membership
-      ? { allowed: true, channel: normalized }
-      : { allowed: false, reason: 'community_channel_forbidden' };
+
+    if (mongoose.connection.readyState !== 1) {
+      return { allowed: false, reason: 'community_membership_authority_unavailable' };
+    }
+
+    try {
+      const membership = await CommunityMembership.findOne({
+        communityId: id,
+        userId: String(userId),
+        status: 'active'
+      }).lean();
+
+      return membership
+        ? { allowed: true, channel: normalized }
+        : { allowed: false, reason: 'community_channel_forbidden' };
+    } catch (_error) {
+      return { allowed: false, reason: 'community_membership_authority_unavailable' };
+    }
   }
 
   const session = await VirtualSession.findOne({ sessionId: id }).lean();
