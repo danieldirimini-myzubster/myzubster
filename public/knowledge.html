@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MyZubster Knowledge Explorer</title>
+  <meta name="description" content="Explore PUBLIC verified MyZubster knowledge from the Zorgax Knowledge Layer.">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="https://myzubster-knowledge.vercel.app/knowledge">
+  <link rel="alternate" hreflang="it" href="https://myzubster-knowledge.vercel.app/conoscenze">
+  <link rel="alternate" hreflang="en" href="https://myzubster-knowledge.vercel.app/knowledge">
+  <link rel="stylesheet" href="/knowledge.css">
+</head>
+<body data-locale="en">
+<main>
+  <nav class="topbar">
+    <a class="brand" href="/">MyZubster Knowledge</a>
+    <div class="navlinks">
+      <a href="/conoscenze">Italiano</a>
+      <a href="https://github.com/danieldirimini-myzubster/myzubster" target="_blank" rel="noopener noreferrer">Repository</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div>
+      <div class="eyebrow">Zorgax Knowledge Layer</div>
+      <h1>Verified Knowledge Explorer</h1>
+      <p>Browse public, reviewed knowledge with provenance, versioning, evidence and lineage.</p>
+    </div>
+    <div class="trust">PUBLIC + VERIFIED only</div>
+  </header>
+
+  <section class="controls" aria-label="Knowledge search">
+    <input id="search" type="search" placeholder="Search title, description, category, source or evidence…">
+    <button id="searchButton">Search</button>
+  </section>
+
+  <section class="statusline">
+    <span id="status">Loading verified knowledge…</span>
+  </section>
+
+  <section id="records" class="grid" aria-live="polite"></section>
+</main>
+<script src="/knowledge-app.js" defer></script>
+</body>
+</html>
