@@ -46,17 +46,20 @@ router.post('/commit', authenticate, async (req, res) => {
       confirmation: req.body?.confirmation
     });
 
-    return res.status(201).json({
+    return res.status(result.idempotent ? 200 : 201).json({
       success: true,
       persisted: true,
+      idempotent: result.idempotent === true,
       contribution: publicKnowledge(result.contribution),
       digest: result.digest,
-      status: 'PENDING_REVIEW',
-      visibility: 'INTERNAL',
+      contentHash: result.contentHash,
+      status: result.contribution.status || 'PENDING_REVIEW',
+      visibility: result.contribution.visibility || 'INTERNAL',
       rewardCreated: false,
       ledgerWritten: false,
       myzTransferred: false,
-      requiresIndependentReview: true
+      requiresIndependentReview:
+        result.contribution.status === 'PENDING_REVIEW'
     });
   } catch (error) {
     const status = error?.code === 11000 ? 409 : 400;
