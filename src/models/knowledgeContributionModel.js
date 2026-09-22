@@ -9,6 +9,14 @@ const knowledgeContributionSchema = new mongoose.Schema({
   reference: { type: String, default: null },
   pilotId: { type: String, default: null, index: true },
   category: { type: String, default: null },
+  visibility: {
+    type: String,
+    enum: ['INTERNAL', 'PUBLIC'],
+    default: 'INTERNAL',
+    index: true
+  },
+  publishedAt: { type: Date, default: null },
+  publishedBy: { type: String, default: null },
   status: {
     type: String,
     enum: ['PENDING_REVIEW', 'APPROVED', 'REJECTED', 'REWARD_ELIGIBLE', 'REWARDED'],
@@ -25,5 +33,6 @@ const knowledgeContributionSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 knowledgeContributionSchema.index({ authorId: 1, pilotId: 1, createdAt: -1 });
+knowledgeContributionSchema.index({ status: 1, visibility: 1, reviewedAt: -1 });
 
 module.exports = mongoose.model('KnowledgeContribution', knowledgeContributionSchema);
