@@ -46,6 +46,9 @@ function requestDoc(overrides = {}) {
     assigneeId: null,
     submission: {},
     review: {},
+    evidenceRequired: [
+      'Passing tests'
+    ],
     save:
       jest.fn()
         .mockResolvedValue(undefined),
@@ -416,6 +419,12 @@ describe(
             submission: {
               submittedBy:
                 'developer-1',
+              evidence: [{
+                requirement:
+                  'Passing tests',
+                reference:
+                  'test:green'
+              }],
               evidenceRefs:
                 ['test:green'],
               commitRefs:
@@ -438,6 +447,108 @@ describe(
         expect(
           request.review.reviewerId
         ).toBe('admin-reviewer');
+      }
+    );
+
+    test(
+      'verification fails when a required evidence item is missing',
+      async () => {
+        const request =
+          requestDoc({
+            status: 'SUBMITTED',
+            createdBy:
+              'creator-1',
+            assigneeId:
+              'developer-1',
+            evidenceRequired: [
+              'Passing tests',
+              'Independent verification'
+            ],
+            submission: {
+              submittedBy:
+                'developer-1',
+              evidence: [{
+                requirement:
+                  'Passing tests',
+                reference:
+                  'test:green'
+              }]
+            }
+          });
+
+        await expect(
+          reviewDevelopmentRequest({
+            request,
+            reviewerId:
+              'admin-reviewer',
+            decision: 'VERIFY'
+          })
+        ).rejects.toThrow(
+          /Evidenze richieste mancanti.*Independent verification/
+        );
+
+        expect(request.status)
+          .toBe('SUBMITTED');
+      }
+    );
+
+    test(
+      'submission rejects evidence mapped to an undeclared requirement',
+      async () => {
+        const request =
+          requestDoc({
+            status: 'IN_PROGRESS',
+            assigneeId:
+              'developer-1'
+          });
+
+        await expect(
+          submitDevelopmentRequest({
+            request,
+            submittedBy:
+              'developer-1',
+            evidence: [{
+              requirement:
+                'Unknown requirement',
+              reference:
+                'test:green'
+            }]
+          })
+        ).rejects.toThrow(
+          /Evidenza non richiesta/
+        );
+      }
+    );
+
+    test(
+      'verification requires an authenticated reviewer',
+      async () => {
+        const request =
+          requestDoc({
+            status: 'SUBMITTED',
+            createdBy:
+              'creator-1',
+            assigneeId:
+              'developer-1',
+            submission: {
+              evidence: [{
+                requirement:
+                  'Passing tests',
+                reference:
+                  'test:green'
+              }]
+            }
+          });
+
+        await expect(
+          reviewDevelopmentRequest({
+            request,
+            reviewerId: '',
+            decision: 'VERIFY'
+          })
+        ).rejects.toThrow(
+          /Reviewer autenticato obbligatorio/
+        );
       }
     );
 

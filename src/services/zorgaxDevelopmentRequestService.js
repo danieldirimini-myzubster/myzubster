@@ -27,6 +27,35 @@ function cleanList(values, maxItems = 30, maxLength = 1000) {
   )].slice(0, maxItems);
 }
 
+function cleanEvidenceMappings(values, maxItems = 30) {
+  if (!Array.isArray(values)) return [];
+
+  const normalized = [];
+  const seenRequirements = new Set();
+
+  for (const item of values) {
+    if (!item || typeof item !== 'object') continue;
+
+    const requirement = clean(item.requirement, 1000);
+    const reference = clean(item.reference, 500);
+
+    if (!requirement || !reference) continue;
+
+    if (seenRequirements.has(requirement)) {
+      throw new Error(
+        `Evidenza duplicata per requisito: ${requirement}`
+      );
+    }
+
+    seenRequirements.add(requirement);
+    normalized.push({ requirement, reference });
+
+    if (normalized.length >= maxItems) break;
+  }
+
+  return normalized;
+}
+
 function normalizeDevelopmentRequestInput(input = {}) {
   const title = clean(input.title, 180);
 
@@ -485,6 +514,7 @@ async function claimDevelopmentRequest(
 async function submitDevelopmentRequest({
   request,
   submittedBy,
+  evidence,
   evidenceRefs,
   commitRefs,
   notes
@@ -503,13 +533,35 @@ async function submitDevelopmentRequest({
     );
   }
 
-  const evidence =
+  const mappedEvidence =
+    cleanEvidenceMappings(evidence, 30);
+
+  const genericEvidenceRefs =
     cleanList(evidenceRefs, 30, 500);
 
   const commits =
     cleanList(commitRefs, 30, 500);
 
-  if (!evidence.length && !commits.length) {
+  const declaredEvidence =
+    cleanList(request.evidenceRequired, 30, 1000);
+
+  if (declaredEvidence.length) {
+    const allowed = new Set(declaredEvidence);
+
+    for (const item of mappedEvidence) {
+      if (!allowed.has(item.requirement)) {
+        throw new Error(
+          `Evidenza non richiesta: ${item.requirement}`
+        );
+      }
+    }
+  }
+
+  if (
+    !mappedEvidence.length &&
+    !genericEvidenceRefs.length &&
+    !commits.length
+  ) {
     throw new Error(
       'La delivery richiede almeno una evidenza o commit reference'
     );
@@ -517,7 +569,8 @@ async function submitDevelopmentRequest({
 
   request.submission = {
     submittedBy: actor,
-    evidenceRefs: evidence,
+    evidence: mappedEvidence,
+    evidenceRefs: genericEvidenceRefs,
     commitRefs: commits,
     notes: clean(notes, 4000),
     submittedAt: new Date()
@@ -544,6 +597,12 @@ async function reviewDevelopmentRequest({
   const normalizedDecision =
     clean(decision, 20).toUpperCase();
 
+  if (!reviewer) {
+    throw new Error(
+      'Reviewer autenticato obbligatorio'
+    );
+  }
+
   if (
     !['VERIFY', 'REJECT']
       .includes(normalizedDecision)
@@ -567,23 +626,63 @@ async function reviewDevelopmentRequest({
   const submission =
     request.submission || {};
 
-  const evidenceCount =
-    Array.isArray(submission.evidenceRefs)
-      ? submission.evidenceRefs.length
-      : 0;
+  const mappedEvidence =
+    cleanEvidenceMappings(
+      submission.evidence,
+      30
+    );
+
+  const genericEvidenceCount =
+    cleanList(
+      submission.evidenceRefs,
+      30,
+      500
+    ).length;
 
   const commitCount =
-    Array.isArray(submission.commitRefs)
-      ? submission.commitRefs.length
-      : 0;
+    cleanList(
+      submission.commitRefs,
+      30,
+      500
+    ).length;
 
   if (
     normalizedDecision === 'VERIFY' &&
-    evidenceCount + commitCount === 0
+    mappedEvidence.length +
+      genericEvidenceCount +
+      commitCount === 0
   ) {
     throw new Error(
       'Una delivery senza evidenze non può essere verificata'
     );
+  }
+
+  if (normalizedDecision === 'VERIFY') {
+    const requiredEvidence =
+      cleanList(
+        request.evidenceRequired,
+        30,
+        1000
+      );
+
+    const coveredRequirements =
+      new Set(
+        mappedEvidence.map(
+          item => item.requirement
+        )
+      );
+
+    const missingEvidence =
+      requiredEvidence.filter(
+        requirement =>
+          !coveredRequirements.has(requirement)
+      );
+
+    if (missingEvidence.length) {
+      throw new Error(
+        `Evidenze richieste mancanti: ${missingEvidence.join('; ')}`
+      );
+    }
   }
 
   request.review = {

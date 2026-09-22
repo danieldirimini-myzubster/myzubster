@@ -33,7 +33,24 @@ const knowledgeRefSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
+const evidenceItemSchema = new mongoose.Schema({
+  requirement: {
+    type: String,
+    required: true,
+    maxlength: 1000
+  },
+  reference: {
+    type: String,
+    required: true,
+    maxlength: 500
+  }
+}, { _id: false });
+
 const submissionSchema = new mongoose.Schema({
+  evidence: {
+    type: [evidenceItemSchema],
+    default: []
+  },
   submittedBy: {
     type: String,
     default: null

@@ -222,6 +222,8 @@ router.patch(
       await submitDevelopmentRequest({
         request,
         submittedBy: req.userId,
+        evidence:
+          req.body?.evidence,
         evidenceRefs:
           req.body?.evidenceRefs,
         commitRefs:
