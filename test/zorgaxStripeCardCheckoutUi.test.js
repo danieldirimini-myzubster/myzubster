@@ -22,17 +22,18 @@ describe('Zorgax Stripe card checkout wiring', () => {
     expect(ui).toContain("window.location.assign(data.checkoutUrl)");
   });
 
-  test('keeps Zorgax and Seller Stripe subscriptions separated', () => {
-    expect(seller).toContain("object.metadata?.product==='zorgax'");
-    expect(seller).toContain('activateZorgaxInvoice(object)');
-    expect(subscription).toContain("'STRIPE'");
+  test('keeps Zorgax payments separate from Seller memberships', () => {
+    expect(route).toContain('createStripeCheckout');
+    expect(seller).toMatch(/object\.metadata\?\.product\s*===\s*['"]zorgax['"]/);
+    expect(seller).toMatch(/activateZorgaxInvoice\s*\(\s*object\s*\)/);
+    expect(subscription).toContain("require('./ZorgaxPurchase').ZorgaxPurchase");
   });
 
   test('shows Seller membership separately from the Zorgax plan', () => {
     expect(ui).toContain("/api/marketplace/seller/me");
     expect(ui).toContain("sellerState.id = 'sellerAccountState'");
     expect(ui).toContain('Marketplace: Seller attivo');
-    expect(ui).toContain('Zorgax e Marketplace Seller sono abbonamenti separati');
+    expect(ui).toContain('Zorgax e Marketplace Seller sono servizi separati');
     expect(ui).toContain("link.textContent = active ? '💼 Seller attivo' : '💼 Diventa Seller'");
   });
 });
