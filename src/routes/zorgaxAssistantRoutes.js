@@ -229,7 +229,14 @@ router.post('/chat', optionalAuthenticate, loadZorgaxAccess, async (req, res) =>
     const safeRequestedLimit = Number.isFinite(requestedLimit) && requestedLimit > 0 ? requestedLimit : 5;
     const limit = policy.maxWebResults > 0 ? Math.min(safeRequestedLimit, policy.maxWebResults) : 1;
     const useWeb = requestedWeb && policy.webResearch;
-    const result = await answer({ message: req.body?.message || req.body?.prompt, useWeb, history: req.body?.history || [], limit });
+    const knowledgeScope = req.userRole === 'admin' ? 'INTERNAL' : 'PUBLIC';
+    const result = await answer({
+      message: req.body?.message || req.body?.prompt,
+      useWeb,
+      history: req.body?.history || [],
+      limit,
+      knowledgeScope
+    });
     const accessNotice = requestedWeb && !policy.webResearch
       ? 'Accedi a MyZubster per abilitare la ricerca web. La risposta corrente usa solo l’assistente base.'
       : policy.researchMode === 'LIMITED' && requestedWeb
