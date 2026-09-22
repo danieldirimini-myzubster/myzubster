@@ -3,7 +3,7 @@
 const { PLANS } = require('./zorgaxPlanCatalog');
 const unified = require('./zorgaxUnifiedCheckoutService');
 
-const SUPPORTED_ASSETS = Object.freeze(['BTC']);
+const { SUPPORTED_ASSETS } = require('./zorgaxPaymentConstants');
 const INTENT_TTL_MS = unified.INTENT_TTL_MS;
 const DEFAULT_BTC_WALLET = unified.btcWallet();
 
