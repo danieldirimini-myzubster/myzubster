@@ -26,6 +26,13 @@ describe('canonical Knowledge Explorer', () => {
     expect(js).toMatch(/evidenceRefs/);
   });
 
+  test('Vercel keeps Knowledge API on the canonical Express app', () => {
+    const vercel = read('vercel.json');
+    expect(vercel).toMatch(/\/api\/zorgax\/knowledge\/\(\.\*\).*\/api\/index\.js/);
+    expect(vercel).toMatch(/\/knowledge\/\?[^\n]*public\/knowledge\.html/);
+    expect(vercel).toMatch(/\/conoscenze\/\?[^\n]*public\/conoscenze\.html/);
+  });
+
   test('frontend remains read-only', () => {
     const js = read('public/knowledge-app.js');
     expect(js).not.toMatch(/method\s*:\s*['"]POST['"]/i);
