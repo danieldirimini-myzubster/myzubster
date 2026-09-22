@@ -28,9 +28,153 @@ async function braveSearch(query,limit){const key=process.env.BRAVE_SEARCH_API_K
 async function tavilySearch(query,limit){const key=process.env.TAVILY_API_KEY;if(!key)return[];const response=await fetch('https://api.tavily.com/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_key:key,query,max_results:limit,search_depth:'advanced',include_answer:false})});if(!response.ok)throw new Error(`Tavily HTTP ${response.status}`);const json=await response.json();return(json.results||[]).slice(0,limit).map((item,index)=>({label:`T${index+1}`,provider:'tavily',title:item.title,url:item.url,snippet:cleanText(item.content,700)}));}
 async function wikipediaSearch(query,limit){const url=new URL('https://en.wikipedia.org/w/api.php');url.searchParams.set('action','query');url.searchParams.set('generator','search');url.searchParams.set('gsrsearch',query);url.searchParams.set('gsrlimit',String(limit));url.searchParams.set('prop','extracts|info');url.searchParams.set('inprop','url');url.searchParams.set('exintro','1');url.searchParams.set('explaintext','1');url.searchParams.set('format','json');url.searchParams.set('origin','*');const response=await fetch(url,{headers:{'User-Agent':'MyZubster-Zorgax/1.0'}});if(!response.ok)throw new Error(`Wikipedia HTTP ${response.status}`);const json=await response.json();return Object.values(json.query?.pages||{}).slice(0,limit).map((item,index)=>({label:`W${index+1}`,provider:'wikipedia',title:item.title,url:item.fullurl,snippet:cleanText(item.extract,700)}));}
 function looksTimeSensitive(text){return /\b(today|tonight|current|currently|latest|news|recent|now|oggi|stasera|attuale|attualmente|ultim[oaie]|notizie|recente|ora|adesso|president|prime minister|pope|papa|election|elezioni|price|prezzo|market|mercato)\b/i.test(String(text||''));}
-async function googleNewsSearch(){return[];}
-async function searchWeb(query,requestedLimit=5){const cleanQuery=cleanText(query,500);if(!cleanQuery)return{query:'',sources:[],errors:[],live_search_available:false,providers_used:[]};const limit=clampLimit(requestedLimit);const errors=[];const groups=await Promise.all([braveSearch(cleanQuery,limit).catch(e=>{errors.push(e.message);return[];}),tavilySearch(cleanQuery,limit).catch(e=>{errors.push(e.message);return[];}),wikipediaSearch(cleanQuery,Math.min(limit,4)).catch(e=>{errors.push(e.message);return[];})]);const seen=new Set();const sources=groups.flat().filter(s=>{if(!s.url||seen.has(s.url))return false;seen.add(s.url);return true;}).slice(0,limit);return{query:cleanQuery,sources,errors,live_search_available:sources.length>0,providers_used:[...new Set(sources.map(s=>s.provider).filter(Boolean))]};}
+function decodeXmlEntities(value){
+  return String(value||'')
+    .replace(/&#x([0-9a-f]+);/gi,(_,hex)=>{
+      try{return String.fromCodePoint(parseInt(hex,16));}catch(_error){return'';}
+    })
+    .replace(/&#([0-9]+);/g,(_,dec)=>{
+      try{return String.fromCodePoint(parseInt(dec,10));}catch(_error){return'';}
+    })
+    .replace(/&amp;/gi,'&')
+    .replace(/&lt;/gi,'<')
+    .replace(/&gt;/gi,'>')
+    .replace(/&quot;/gi,'"')
+    .replace(/&apos;/gi,"'");
+}
 
+function xmlTagValue(block,tag){
+  const match=String(block||'').match(
+    new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`,'i')
+  );
+  if(!match)return'';
+  return decodeXmlEntities(
+    match[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,'$1')
+  ).trim();
+}
+
+function stripXmlHtml(value,max=700){
+  return cleanText(
+    decodeXmlEntities(
+      String(value||'')
+        .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,'$1')
+        .replace(/<[^>]+>/g,' ')
+        .replace(/\s+/g,' ')
+    ),
+    max
+  );
+}
+
+async function googleNewsSearch(query,limit){
+  const cleanQuery=cleanText(query,500);
+  if(!cleanQuery)return[];
+
+  const url=new URL('https://news.google.com/rss/search');
+  url.searchParams.set('q',cleanQuery);
+  url.searchParams.set('hl','en-US');
+  url.searchParams.set('gl','US');
+  url.searchParams.set('ceid','US:en');
+
+  const response=await fetch(url,{
+    headers:{
+      'User-Agent':'MyZubster-Zorgax/1.0',
+      Accept:'application/rss+xml, application/xml, text/xml'
+    }
+  });
+
+  if(!response.ok){
+    throw new Error(`Google News HTTP ${response.status}`);
+  }
+
+  const xml=await response.text();
+  const items=String(xml||'').match(/<item\b[\s\S]*?<\/item>/gi)||[];
+
+  return items
+    .slice(0,limit)
+    .map((item,index)=>{
+      const title=cleanText(xmlTagValue(item,'title'),300);
+      const link=cleanText(xmlTagValue(item,'link'),1000);
+      const source=cleanText(xmlTagValue(item,'source'),200);
+      const description=stripXmlHtml(xmlTagValue(item,'description'),700);
+      const publishedAt=cleanText(xmlTagValue(item,'pubDate'),120);
+
+      return{
+        label:`G${index+1}`,
+        provider:'google_news',
+        title,
+        url:link,
+        snippet:cleanText(
+          [source,description].filter(Boolean).join(' — '),
+          700
+        ),
+        published_at:publishedAt||null
+      };
+    })
+    .filter(item=>item.title&&item.url);
+}
+async function searchWeb(query,requestedLimit=5){
+  const cleanQuery=cleanText(query,500);
+
+  if(!cleanQuery){
+    return{
+      query:'',
+      sources:[],
+      errors:[],
+      live_search_available:false,
+      providers_used:[]
+    };
+  }
+
+  const limit=clampLimit(requestedLimit);
+  const errors=[];
+
+  const safeSearch=(promiseFactory)=>{
+    return promiseFactory().catch(error=>{
+      errors.push(error.message);
+      return[];
+    });
+  };
+
+  const searches=[
+    safeSearch(()=>braveSearch(cleanQuery,limit)),
+    safeSearch(()=>tavilySearch(cleanQuery,limit))
+  ];
+
+  if(looksTimeSensitive(cleanQuery)){
+    searches.push(
+      safeSearch(()=>googleNewsSearch(cleanQuery,limit))
+    );
+  }
+
+  searches.push(
+    safeSearch(()=>wikipediaSearch(cleanQuery,Math.min(limit,4)))
+  );
+
+  const groups=await Promise.all(searches);
+
+  const seen=new Set();
+
+  const sources=groups
+    .flat()
+    .filter(source=>{
+      if(!source.url||seen.has(source.url))return false;
+      seen.add(source.url);
+      return true;
+    })
+    .slice(0,limit);
+
+  return{
+    query:cleanQuery,
+    sources,
+    errors,
+    live_search_available:sources.length>0,
+    providers_used:[
+      ...new Set(
+        sources.map(source=>source.provider).filter(Boolean)
+      )
+    ]
+  };
+}
 function loadZorgaxPersona(){try{return fs.readFileSync(path.join(process.cwd(),'agents','zorgax','SYSTEM_PROMPT.md'),'utf8');}catch(_){return 'You are Zorgax, the MyZubster product copilot. MyZubster is a live evolving open-source ecosystem. Be concise, product-first, and guide users to Marketplace, Seller, Metaverse, LIFE Pilot, or Community.';}}
 function loadKefirModule(){try{return fs.readFileSync(path.join(process.cwd(),'agents','zorgax','KEFIR_ASSISTANT.md'),'utf8');}catch(_){return '';}}
 function buildRuntimeProductContext(){
