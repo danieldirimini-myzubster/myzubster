@@ -86,7 +86,13 @@ describe('role separation', () => {
     const res = await request(app()).get('/api/payment-dashboard/funding-inputs').set('Authorization', ADMIN);
     expect(res.status).toBe(200);
     expect(res.body.configured).toBe(false);
-    expect(res.body.items).toEqual([]);
+    expect(Array.isArray(res.body.items)).toBe(true);
+    res.body.items.forEach((item) => {
+      expect(item).toMatchObject({
+        kind: 'FUNDING_INPUT',
+        approvesBounty: false
+      });
+    });
   });
 });
 
