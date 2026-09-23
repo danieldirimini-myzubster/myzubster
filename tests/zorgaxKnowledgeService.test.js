@@ -7,7 +7,9 @@ const {
   assertConfirmedPreview,
   commitKnowledgeCandidate,
   buildSearchFilter,
+  buildPublicSearchFilter,
   searchVerifiedKnowledge,
+  searchPublicKnowledge,
   buildKnowledgeContext
 } = require('../src/services/zorgaxKnowledgeService');
 
@@ -78,7 +80,15 @@ describe('Zorgax verified internal knowledge', () => {
     expect(committed.myzTransferred).toBe(false);
   });
 
-  test('public retrieval admits only explicit PUBLIC verified knowledge', () => {
+  test('public explorer retrieval includes every explicit PUBLIC record', () => {
+    const filter = buildPublicSearchFilter('privacy marketplace');
+
+    expect(filter.visibility).toBe('PUBLIC');
+    expect(filter.status).toBeUndefined();
+    expect(filter.$and).toHaveLength(2);
+  });
+
+  test('verified retrieval remains restricted for trusted assistant context', () => {
     const filter = buildSearchFilter('privacy marketplace');
 
     expect(filter.status.$in).toEqual(VERIFIED_STATUSES);
@@ -143,7 +153,7 @@ describe('Zorgax verified internal knowledge', () => {
   test('returns no knowledge immediately when Mongo is disconnected', async () => {
     const find = jest.fn();
 
-    const items = await searchVerifiedKnowledge({
+    const verified = await searchVerifiedKnowledge({
       query: 'privacy',
       KnowledgeModel: {
         db: { readyState: 0 },
@@ -151,7 +161,16 @@ describe('Zorgax verified internal knowledge', () => {
       }
     });
 
-    expect(items).toEqual([]);
+    const publicItems = await searchPublicKnowledge({
+      query: 'privacy',
+      KnowledgeModel: {
+        db: { readyState: 0 },
+        find
+      }
+    });
+
+    expect(verified).toEqual([]);
+    expect(publicItems).toEqual([]);
     expect(find).not.toHaveBeenCalled();
   });
 });
