@@ -116,6 +116,6 @@ describe('Zorgax shared runtime product context', () => {
     expect(prompt).toContain('RUNTIME PRODUCT FACTS — CANONICAL APPLICATION CONTEXT');
     expect(prompt).toContain('/marketplace');
     expect(prompt).toContain('/life-pilot');
-    expect(prompt).toContain('USER MESSAGE:\\nQuali funzioni sono live?');
+    expect(prompt).toContain('USER MESSAGE:\nQuali funzioni sono live?');
   });
 });

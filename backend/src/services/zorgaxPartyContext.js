@@ -63,8 +63,10 @@ async function resolveSessionSummary(sessionId) {
   if (!normalizedSessionId) return null;
 
   if (!databaseAvailable()) {
+    // A caller-supplied session id is only a lookup hint. When authoritative
+    // storage is unavailable, do not reflect that unverified identifier into
+    // the public PartyContext.
     return {
-      id: normalizedSessionId,
       state: 'unknown',
       live: false,
       participantCount: null,
@@ -158,6 +160,7 @@ function validatePartyContext(context) {
     'email',
     'userid',
     'accountuserid',
+    'sessionid',
     'roles',
     'ipaddress',
     'privatekey',

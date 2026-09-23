@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MyZubster — Esplora Conoscenze</title>
+  <meta name="description" content="Esplora tutte le conoscenze PUBLIC di MyZubster dal Knowledge Layer di Zorgax, con stato di verifica sempre visibile.">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="https://myzubster-knowledge.vercel.app/conoscenze">
+  <link rel="alternate" hreflang="it" href="https://myzubster-knowledge.vercel.app/conoscenze">
+  <link rel="alternate" hreflang="en" href="https://myzubster-knowledge.vercel.app/knowledge">
+  <link rel="stylesheet" href="/knowledge.css">
+</head>
+<body data-locale="it" data-knowledge-build="2026-09-23-public-v2">
+<main>
+  <nav class="topbar">
+    <a class="brand" href="/">MyZubster Knowledge</a>
+    <div class="navlinks">
+      <a href="/knowledge">English</a>
+      <a href="https://github.com/danieldirimini-myzubster/myzubster" target="_blank" rel="noopener noreferrer">Repository</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div>
+      <div class="eyebrow">Zorgax Knowledge Layer</div>
+      <h1>Esplora le Conoscenze Pubbliche</h1>
+      <p>Consulta tutte le conoscenze pubbliche di MyZubster. Provenienza, versioni, evidenze, lineage e stato di verifica restano visibili su ogni record.</p>
+    </div>
+    <div class="trust">tutte le PUBLIC · stato visibile</div>
+  </header>
+
+  <section class="controls" aria-label="Ricerca conoscenze">
+    <input id="search" type="search" placeholder="Cerca titolo, descrizione, categoria, fonte o evidenza…">
+    <button id="searchButton">Cerca</button>
+  </section>
+
+  <section class="statusline">
+    <span id="status">Caricamento conoscenza pubblica…</span>
+  </section>
+
+  <section id="records" class="grid" aria-live="polite"></section>
+</main>
+<script src="/knowledge-app.js" defer></script>
+</body>
+</html>

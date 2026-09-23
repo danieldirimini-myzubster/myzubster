@@ -16,8 +16,8 @@ describe('metaverse production observability wiring', () => {
   });
 
   test('keeps the health endpoint reachable during a database incident', () => {
-    expect(serverSource).toContain("if (req.path === '/health') return next()");
-    expect(serverSource).toContain("failure: 'storage_gate'");
+    expect(serverSource).toMatch(/if\s*\(\s*req\.path\s*===\s*['"]\/health['"]\s*\)\s*return\s+next\(\)\s*;?/);
+    expect(serverSource).toMatch(/failure\s*:\s*['"]storage_gate['"]/);
   });
 
   test('documents alert thresholds, incident handling and privacy boundaries', () => {

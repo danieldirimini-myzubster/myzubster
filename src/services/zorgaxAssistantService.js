@@ -3,6 +3,11 @@ const fs = require('fs');
 const path = require('path');
 const { selectModel, estimateAstraCost } = require('./aiModelRouter');
 const { getAstraMonthlySpend, recordAstraUsage, reserveAstraBudget, settleAstraBudget, releaseAstraBudget } = require('./zorgaxAIUsageService');
+const {
+  searchVerifiedKnowledge,
+  buildKnowledgeContext,
+  publicKnowledge
+} = require('./zorgaxKnowledgeService');
 
 const DEFAULT_GATEWAY = 'https://myzubster-gateway.vercel.app';
 const MAX_SOURCES = 8;
@@ -23,9 +28,153 @@ async function braveSearch(query,limit){const key=process.env.BRAVE_SEARCH_API_K
 async function tavilySearch(query,limit){const key=process.env.TAVILY_API_KEY;if(!key)return[];const response=await fetch('https://api.tavily.com/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_key:key,query,max_results:limit,search_depth:'advanced',include_answer:false})});if(!response.ok)throw new Error(`Tavily HTTP ${response.status}`);const json=await response.json();return(json.results||[]).slice(0,limit).map((item,index)=>({label:`T${index+1}`,provider:'tavily',title:item.title,url:item.url,snippet:cleanText(item.content,700)}));}
 async function wikipediaSearch(query,limit){const url=new URL('https://en.wikipedia.org/w/api.php');url.searchParams.set('action','query');url.searchParams.set('generator','search');url.searchParams.set('gsrsearch',query);url.searchParams.set('gsrlimit',String(limit));url.searchParams.set('prop','extracts|info');url.searchParams.set('inprop','url');url.searchParams.set('exintro','1');url.searchParams.set('explaintext','1');url.searchParams.set('format','json');url.searchParams.set('origin','*');const response=await fetch(url,{headers:{'User-Agent':'MyZubster-Zorgax/1.0'}});if(!response.ok)throw new Error(`Wikipedia HTTP ${response.status}`);const json=await response.json();return Object.values(json.query?.pages||{}).slice(0,limit).map((item,index)=>({label:`W${index+1}`,provider:'wikipedia',title:item.title,url:item.fullurl,snippet:cleanText(item.extract,700)}));}
 function looksTimeSensitive(text){return /\b(today|tonight|current|currently|latest|news|recent|now|oggi|stasera|attuale|attualmente|ultim[oaie]|notizie|recente|ora|adesso|president|prime minister|pope|papa|election|elezioni|price|prezzo|market|mercato)\b/i.test(String(text||''));}
-async function googleNewsSearch(){return[];}
-async function searchWeb(query,requestedLimit=5){const cleanQuery=cleanText(query,500);if(!cleanQuery)return{query:'',sources:[],errors:[],live_search_available:false,providers_used:[]};const limit=clampLimit(requestedLimit);const errors=[];const groups=await Promise.all([braveSearch(cleanQuery,limit).catch(e=>{errors.push(e.message);return[];}),tavilySearch(cleanQuery,limit).catch(e=>{errors.push(e.message);return[];}),wikipediaSearch(cleanQuery,Math.min(limit,4)).catch(e=>{errors.push(e.message);return[];})]);const seen=new Set();const sources=groups.flat().filter(s=>{if(!s.url||seen.has(s.url))return false;seen.add(s.url);return true;}).slice(0,limit);return{query:cleanQuery,sources,errors,live_search_available:sources.length>0,providers_used:[...new Set(sources.map(s=>s.provider).filter(Boolean))]};}
+function decodeXmlEntities(value){
+  return String(value||'')
+    .replace(/&#x([0-9a-f]+);/gi,(_,hex)=>{
+      try{return String.fromCodePoint(parseInt(hex,16));}catch(_error){return'';}
+    })
+    .replace(/&#([0-9]+);/g,(_,dec)=>{
+      try{return String.fromCodePoint(parseInt(dec,10));}catch(_error){return'';}
+    })
+    .replace(/&amp;/gi,'&')
+    .replace(/&lt;/gi,'<')
+    .replace(/&gt;/gi,'>')
+    .replace(/&quot;/gi,'"')
+    .replace(/&apos;/gi,"'");
+}
 
+function xmlTagValue(block,tag){
+  const match=String(block||'').match(
+    new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`,'i')
+  );
+  if(!match)return'';
+  return decodeXmlEntities(
+    match[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,'$1')
+  ).trim();
+}
+
+function stripXmlHtml(value,max=700){
+  return cleanText(
+    decodeXmlEntities(
+      String(value||'')
+        .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,'$1')
+        .replace(/<[^>]+>/g,' ')
+        .replace(/\s+/g,' ')
+    ),
+    max
+  );
+}
+
+async function googleNewsSearch(query,limit){
+  const cleanQuery=cleanText(query,500);
+  if(!cleanQuery)return[];
+
+  const url=new URL('https://news.google.com/rss/search');
+  url.searchParams.set('q',cleanQuery);
+  url.searchParams.set('hl','en-US');
+  url.searchParams.set('gl','US');
+  url.searchParams.set('ceid','US:en');
+
+  const response=await fetch(url,{
+    headers:{
+      'User-Agent':'MyZubster-Zorgax/1.0',
+      Accept:'application/rss+xml, application/xml, text/xml'
+    }
+  });
+
+  if(!response.ok){
+    throw new Error(`Google News HTTP ${response.status}`);
+  }
+
+  const xml=await response.text();
+  const items=String(xml||'').match(/<item\b[\s\S]*?<\/item>/gi)||[];
+
+  return items
+    .slice(0,limit)
+    .map((item,index)=>{
+      const title=cleanText(xmlTagValue(item,'title'),300);
+      const link=cleanText(xmlTagValue(item,'link'),1000);
+      const source=cleanText(xmlTagValue(item,'source'),200);
+      const description=stripXmlHtml(xmlTagValue(item,'description'),700);
+      const publishedAt=cleanText(xmlTagValue(item,'pubDate'),120);
+
+      return{
+        label:`G${index+1}`,
+        provider:'google_news',
+        title,
+        url:link,
+        snippet:cleanText(
+          [source,description].filter(Boolean).join(' — '),
+          700
+        ),
+        published_at:publishedAt||null
+      };
+    })
+    .filter(item=>item.title&&item.url);
+}
+async function searchWeb(query,requestedLimit=5){
+  const cleanQuery=cleanText(query,500);
+
+  if(!cleanQuery){
+    return{
+      query:'',
+      sources:[],
+      errors:[],
+      live_search_available:false,
+      providers_used:[]
+    };
+  }
+
+  const limit=clampLimit(requestedLimit);
+  const errors=[];
+
+  const safeSearch=(promiseFactory)=>{
+    return promiseFactory().catch(error=>{
+      errors.push(error.message);
+      return[];
+    });
+  };
+
+  const searches=[
+    safeSearch(()=>braveSearch(cleanQuery,limit)),
+    safeSearch(()=>tavilySearch(cleanQuery,limit))
+  ];
+
+  if(looksTimeSensitive(cleanQuery)){
+    searches.push(
+      safeSearch(()=>googleNewsSearch(cleanQuery,limit))
+    );
+  }
+
+  searches.push(
+    safeSearch(()=>wikipediaSearch(cleanQuery,Math.min(limit,4)))
+  );
+
+  const groups=await Promise.all(searches);
+
+  const seen=new Set();
+
+  const sources=groups
+    .flat()
+    .filter(source=>{
+      if(!source.url||seen.has(source.url))return false;
+      seen.add(source.url);
+      return true;
+    })
+    .slice(0,limit);
+
+  return{
+    query:cleanQuery,
+    sources,
+    errors,
+    live_search_available:sources.length>0,
+    providers_used:[
+      ...new Set(
+        sources.map(source=>source.provider).filter(Boolean)
+      )
+    ]
+  };
+}
 function loadZorgaxPersona(){try{return fs.readFileSync(path.join(process.cwd(),'agents','zorgax','SYSTEM_PROMPT.md'),'utf8');}catch(_){return 'You are Zorgax, the MyZubster product copilot. MyZubster is a live evolving open-source ecosystem. Be concise, product-first, and guide users to Marketplace, Seller, Metaverse, LIFE Pilot, or Community.';}}
 function loadKefirModule(){try{return fs.readFileSync(path.join(process.cwd(),'agents','zorgax','KEFIR_ASSISTANT.md'),'utf8');}catch(_){return '';}}
 function buildRuntimeProductContext(){
@@ -47,11 +196,15 @@ function buildRuntimeProductContext(){
 function buildSourceContext(sources=[]){
   return sources.length?`\n\nFONTI WEB RECUPERATE:\n${sources.map(s=>`[${s.label}] ${s.title}\n${s.url}\n${s.snippet}`).join('\n\n')}`:'';
 }
-function buildAssistantPrompt(message,sources=[]){
+function buildAssistantPrompt(message,sources=[],knowledgeItems=[],includeInternalKnowledge=false){
   const persona=loadZorgaxPersona();
   const runtime=buildRuntimeProductContext();
   const kefirContext=kefirIntent(message)?`\n\nACTIVE SPECIALIST MODE: KEFIR / CIRCULAR FOOD\n${loadKefirModule()}`:'';
-  return `${persona}${runtime}${kefirContext}\n\nUSER MESSAGE:\n${cleanText(message)}${buildSourceContext(sources)}`;
+  const knowledgeContext=buildKnowledgeContext(
+    knowledgeItems,
+    {includeInternal:includeInternalKnowledge}
+  );
+  return `${persona}${runtime}${kefirContext}${knowledgeContext?`\n\n${knowledgeContext}`:''}\n\nUSER MESSAGE:\n${cleanText(message)}${buildSourceContext(sources)}`;
 }
 
 function extractOpenAIText(json){
@@ -86,9 +239,9 @@ async function callOpenAI({model,input}){
   if(!response.ok)throw makeOpenAIError(openAIErrorInfo(response,json));
   return{json,model,requestId:json.id||response.headers?.get?.('x-request-id')||null};
 }
-async function askOpenAI(message,sources=[],history=[],reservationUsd=0){
+async function askOpenAI(message,sources=[],history=[],reservationUsd=0,knowledgeItems=[],includeInternalKnowledge=false){
   if(!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY missing');
-  const input=buildAssistantPrompt(message,sources);
+  const input=buildAssistantPrompt(message,sources,knowledgeItems,includeInternalKnowledge);
   const primaryModel=process.env.ZORGAX_ASTRA_MODEL||'gpt-5.6-sol';
   const secondaryModel=process.env.ZORGAX_ASTRA_FALLBACK_MODEL||'gpt-5.6-luna';
   const models=[...new Set([primaryModel,secondaryModel].filter(Boolean))];
@@ -117,11 +270,185 @@ async function askOpenAI(message,sources=[],history=[],reservationUsd=0){
   throw lastError||new Error('OpenAI request failed');
 }
 
-async function askGeneralAI(message,sources=[],history=[],webRequested=false){
+async function askGeneralAI(message,sources=[],history=[],webRequested=false,knowledgeItems=[],includeInternalKnowledge=false){
   const gateway=String(process.env.ZORGAX_PUBLIC_AI_URL||DEFAULT_GATEWAY).replace(/\/$/,'');
-  const prompt=buildAssistantPrompt(message,sources);
+  const prompt=buildAssistantPrompt(message,sources,knowledgeItems,includeInternalKnowledge);
   const response=await fetch(`${gateway}/api/zargox/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:prompt,useWeb:false,history:Array.isArray(history)?history.slice(-12):[]})});
   const json=await response.json().catch(()=>({}));if(!response.ok)throw new Error(`AI gateway HTTP ${response.status}`);return json.response||json.message||json.answer||'';
 }
-async function answer({message,useWeb=true,history=[],limit=5}){const text=cleanText(message);if(!text)throw new Error('Messaggio mancante');if(dataIntent(text)){const dataPreview=previewData(text.replace(/^.*?\b(?:salva|inserisci|registra|memorizza|immetti)\b\s*/i,''));return{response:`Ho preparato l'anteprima dei dati. Non ho salvato nulla. Per renderli persistenti devi confermare esplicitamente con: ${dataPreview.confirmation}`,data_preview:dataPreview,action_required:'human_confirmation',sources:[]};}const research=useWeb?await searchWeb(text,limit):{query:text,sources:[],errors:[],live_search_available:false,providers_used:[]};const astraSpentUsd=await getAstraMonthlySpend().catch(()=>0);const route=selectModel({message:text,useResearch:useWeb,astraSpentUsd});let response;if(route.provider==='openai'){const worstCaseInputTokens=Buffer.byteLength(cleanText(buildAssistantPrompt(text,research.sources),OPENAI_MAX_INPUT_CHARS),'utf8');const worstCaseUsd=estimateAstraCost({inputTokens:worstCaseInputTokens,outputTokens:OPENAI_MAX_OUTPUT_TOKENS,model:route.model});const configuredReserve=Math.max(0,Number(process.env.ZORGAX_ASTRA_REQUEST_RESERVE_USD)||1);const reservationUsd=Math.max(configuredReserve,worstCaseUsd);const reservation=reservationUsd<=route.remainingBudgetUsd?await reserveAstraBudget({amountUsd:reservationUsd,budgetUsd:route.budgetUsd}):null;if(!reservation){route.fallbackReason='budget_reservation_failed';route.provider='ollama';route.model=process.env.OLLAMA_MODEL||'qwen2.5:3b';response=await askGeneralAI(text,research.sources,history,useWeb);}else{try{const openaiResult=await askOpenAI(text,research.sources,history,reservationUsd);response=openaiResult.text;route.model=openaiResult.model;}catch(error){await releaseAstraBudget({reservedUsd:reservationUsd}).catch(()=>{});console.error('[zorgax-openai-fallback]',JSON.stringify({status:error.status||null,code:error.code||null,type:error.type||null,requestId:error.requestId||null,fallbackReason:error.fallbackReason||'openai_error'}));response=await askGeneralAI(text,research.sources,history,useWeb);route.fallbackReason=error.fallbackReason||'openai_error';route.provider='ollama';route.model=process.env.OLLAMA_MODEL||'qwen2.5:3b';}}}else{response=await askGeneralAI(text,research.sources,history,useWeb);}return{response,ai_provider:route.provider,ai_model:route.model,ai_budget_remaining_usd:route.remainingBudgetUsd,ai_fallback_reason:route.fallbackReason||null,sources:research.sources,search_errors:research.errors,web_research_requested:Boolean(useWeb),web_research_available:Boolean(research.live_search_available),web_providers_used:research.providers_used,specialist_mode:kefirIntent(text)?'kefir-circular-food':null,action_required:null};}
+async function answer({
+  message,
+  useWeb=true,
+  history=[],
+  limit=5,
+  knowledgeScope='PUBLIC'
+}){
+  const text=cleanText(message);
+  if(!text)throw new Error('Messaggio mancante');
+
+  if(dataIntent(text)){
+    const dataPreview=previewData(
+      text.replace(/^.*?\b(?:salva|inserisci|registra|memorizza|immetti)\b\s*/i,'')
+    );
+    return{
+      response:`Ho preparato l'anteprima dei dati. Non ho salvato nulla. Per renderli persistenti devi confermare esplicitamente con: ${dataPreview.confirmation}`,
+      data_preview:dataPreview,
+      action_required:'human_confirmation',
+      sources:[],
+      knowledge_sources:[]
+    };
+  }
+
+  const includeInternalKnowledge=knowledgeScope==='INTERNAL';
+
+  const knowledgeItems=await searchVerifiedKnowledge({
+    query:text,
+    limit:Math.min(Number(limit)||5,5),
+    includeInternal:includeInternalKnowledge
+  }).catch(error=>{
+    console.warn('[zorgax-knowledge-retrieval]',error?.message||'knowledge retrieval failed');
+    return[];
+  });
+
+  const research=useWeb
+    ?await searchWeb(text,limit)
+    :{
+      query:text,
+      sources:[],
+      errors:[],
+      live_search_available:false,
+      providers_used:[]
+    };
+
+  const astraSpentUsd=await getAstraMonthlySpend().catch(()=>0);
+
+  const route=selectModel({
+    message:text,
+    useResearch:useWeb,
+    astraSpentUsd
+  });
+
+  let response;
+
+  const promptForBudget=buildAssistantPrompt(
+    text,
+    research.sources,
+    knowledgeItems,
+    includeInternalKnowledge
+  );
+
+  if(route.provider==='openai'){
+    const worstCaseInputTokens=Buffer.byteLength(
+      cleanText(promptForBudget,OPENAI_MAX_INPUT_CHARS),
+      'utf8'
+    );
+
+    const worstCaseUsd=estimateAstraCost({
+      inputTokens:worstCaseInputTokens,
+      outputTokens:OPENAI_MAX_OUTPUT_TOKENS,
+      model:route.model
+    });
+
+    const configuredReserve=Math.max(
+      0,
+      Number(process.env.ZORGAX_ASTRA_REQUEST_RESERVE_USD)||1
+    );
+
+    const reservationUsd=Math.max(
+      configuredReserve,
+      worstCaseUsd
+    );
+
+    const reservation=
+      reservationUsd<=route.remainingBudgetUsd
+        ?await reserveAstraBudget({
+          amountUsd:reservationUsd,
+          budgetUsd:route.budgetUsd
+        })
+        :null;
+
+    if(!reservation){
+      route.fallbackReason='budget_reservation_failed';
+      route.provider='ollama';
+      route.model=process.env.OLLAMA_MODEL||'qwen2.5:3b';
+
+      response=await askGeneralAI(
+        text,
+        research.sources,
+        history,
+        useWeb,
+        knowledgeItems,
+        includeInternalKnowledge
+      );
+    }else{
+      try{
+        const openaiResult=await askOpenAI(
+          text,
+          research.sources,
+          history,
+          reservationUsd,
+          knowledgeItems,
+          includeInternalKnowledge
+        );
+
+        response=openaiResult.text;
+        route.model=openaiResult.model;
+      }catch(error){
+        await releaseAstraBudget({
+          reservedUsd:reservationUsd
+        }).catch(()=>{});
+
+        console.error(
+          '[zorgax-openai-fallback]',
+          JSON.stringify({
+            status:error.status||null,
+            code:error.code||null,
+            type:error.type||null,
+            requestId:error.requestId||null,
+            fallbackReason:error.fallbackReason||'openai_error'
+          })
+        );
+
+        response=await askGeneralAI(
+          text,
+          research.sources,
+          history,
+          useWeb,
+          knowledgeItems,
+          includeInternalKnowledge
+        );
+
+        route.fallbackReason=error.fallbackReason||'openai_error';
+        route.provider='ollama';
+        route.model=process.env.OLLAMA_MODEL||'qwen2.5:3b';
+      }
+    }
+  }else{
+    response=await askGeneralAI(
+      text,
+      research.sources,
+      history,
+      useWeb,
+      knowledgeItems,
+      includeInternalKnowledge
+    );
+  }
+
+  return{
+    response,
+    ai_provider:route.provider,
+    ai_model:route.model,
+    ai_budget_remaining_usd:route.remainingBudgetUsd,
+    ai_fallback_reason:route.fallbackReason||null,
+    sources:research.sources,
+    search_errors:research.errors,
+    web_research_requested:Boolean(useWeb),
+    web_research_available:Boolean(research.live_search_available),
+    web_providers_used:research.providers_used,
+    knowledge_scope:includeInternalKnowledge?'INTERNAL':'PUBLIC',
+    knowledge_sources:knowledgeItems.map(publicKnowledge),
+    specialist_mode:kefirIntent(text)?'kefir-circular-food':null,
+    action_required:null
+  };
+}
 module.exports={answer,searchWeb,previewData,digestPreview,dataIntent,kefirIntent,inferCategory,looksTimeSensitive,googleNewsSearch,openAIFallbackReason,buildRuntimeProductContext,buildAssistantPrompt};

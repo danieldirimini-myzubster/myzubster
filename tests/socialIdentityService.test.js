@@ -8,11 +8,17 @@ const User = require('../src/models/User');
 const MetaverseCharacter = require('../backend/src/models/MetaverseCharacter');
 const { upsertVerifiedAccount } = require('../src/services/socialIdentityService');
 
+const backendMongoose = MetaverseCharacter.base;
 let mongo;
 
 beforeAll(async () => {
   mongo = await MongoMemoryServer.create();
-  await mongoose.connect(mongo.getUri());
+  const uri = mongo.getUri();
+
+  await mongoose.connect(uri);
+  if (backendMongoose !== mongoose) {
+    await backendMongoose.connect(uri);
+  }
 });
 
 afterEach(async () => {
@@ -21,7 +27,10 @@ afterEach(async () => {
 
 afterAll(async () => {
   await mongoose.disconnect();
-  await mongo.stop();
+  if (backendMongoose !== mongoose) {
+    await backendMongoose.disconnect();
+  }
+  if (mongo) await mongo.stop();
 });
 
 test.each([
@@ -44,8 +53,8 @@ test.each([
   expect(await MetaverseCharacter.countDocuments()).toBe(1);
 });
 
-test('new social account requires an email', async () => {
-  await expect(upsertVerifiedAccount('facebook', { id: 'fb-no-email', name: 'No Email' }))
+test('new non-facebook social account requires an email', async () => {
+  await expect(upsertVerifiedAccount('google', { id: 'google-no-email', name: 'No Email' }))
     .rejects.toThrow('email');
 });
 

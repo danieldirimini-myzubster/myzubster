@@ -33,7 +33,17 @@ function createZorgaxAccessMiddleware({ getAccessFn = getAccess } = {}) {
       req.zorgaxPolicy = getAccessPolicy(access, { authenticated: Boolean(req.userId) });
       next();
     } catch (error) {
-      res.status(503).json({ ok: false, error: 'Controllo accesso Zorgax non disponibile' });
+      const access = {
+        ...guestAccess(),
+        source: 'DEGRADED_FREE'
+      };
+      req.zorgaxAccess = access;
+      req.zorgaxPolicy = getAccessPolicy(access, {
+        authenticated: Boolean(req.userId)
+      });
+      req.zorgaxAccessDegraded = true;
+      console.warn('[zorgax-access] falling back to free access:', error?.message || 'unknown error');
+      return next();
     }
   }
 

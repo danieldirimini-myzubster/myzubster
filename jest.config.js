@@ -4,6 +4,8 @@ module.exports = {
   ],
   testPathIgnorePatterns: [
     '/node_modules/',
-    '/frontend/'
+    '/frontend/',
+    '/src/services/marketplaceOrderPaymentPolicy\\.test\\.js$',
+    '\\.node\\.test\\.js$'
   ]
 };

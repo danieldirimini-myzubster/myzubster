@@ -46,11 +46,11 @@ async function uniqueUsername(base) {
 }
 
 async function ensureCharacter(user, provider, profile) {
-  let character = await MetaverseCharacter.findOne({ accountUserId: user._id });
+  let character = await MetaverseCharacter.findOne({ accountUserId: String(user._id) });
   const displayName = safeName(profile.name || profile.login || user.username);
   const providerIdentity = { provider, providerId: String(profile.id), verifiedAt: new Date() };
   if (!character) {
-    character = new MetaverseCharacter({ characterId:`account-${String(user._id)}`, displayName, characterName:displayName, archetype:'explorer', identityStatus:'account-linked', worldId:'neon-plaza', createdFrom:provider === 'github' ? 'account-github' : 'account-social', accountUserId:user._id, identityProviders:[providerIdentity], lastSeenAt:new Date() });
+    character = new MetaverseCharacter({ characterId:`account-${String(user._id)}`, displayName, characterName:displayName, archetype:'explorer', identityStatus:'account-linked', worldId:'neon-plaza', createdFrom:provider === 'github' ? 'account-github' : 'account-social', accountUserId:String(user._id), identityProviders:[providerIdentity], lastSeenAt:new Date() });
   } else {
     character.identityStatus = 'account-linked'; character.lastSeenAt = new Date();
     const providers = Array.isArray(character.identityProviders) ? character.identityProviders.filter(item => item.provider !== provider) : [];
@@ -84,8 +84,23 @@ async function upsertVerifiedAccount(provider, profile) {
   if (profile.email) providerIdentity.email = String(profile.email).toLowerCase();
   user.socialIdentities[provider] = providerIdentity;
   if (provider === 'github') {
-    const previousSnapshot = user.github?.publicSnapshot;
-    user.github = { id:String(profile.id), login:profile.login, avatarUrl:profile.avatarUrl, profileUrl:profile.profileUrl, verifiedAt:new Date(), publicSnapshot:normalizeGithubSnapshot(profile.publicSnapshot) || previousSnapshot };
+    const publicSnapshot = normalizeGithubSnapshot(profile.publicSnapshot);
+
+    user.set('github.id', String(profile.id));
+    user.set('github.verifiedAt', new Date());
+
+    if (profile.login !== undefined) {
+      user.set('github.login', profile.login);
+    }
+    if (profile.avatarUrl !== undefined) {
+      user.set('github.avatarUrl', profile.avatarUrl);
+    }
+    if (profile.profileUrl !== undefined) {
+      user.set('github.profileUrl', profile.profileUrl);
+    }
+    if (publicSnapshot) {
+      user.set('github.publicSnapshot', publicSnapshot);
+    }
   }
   if (shouldBootstrapAdmin(profile) && user.role !== 'admin') {
     user.role = 'admin';
