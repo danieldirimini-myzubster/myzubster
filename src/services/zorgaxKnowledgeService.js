@@ -411,6 +411,67 @@ function buildSearchFilter(
   return filter;
 }
 
+function buildPublicSearchFilter(query) {
+  const text = clean(query, 200);
+  const filter = { visibility: 'PUBLIC' };
+
+  const terms = [...new Set(
+    text
+      .split(/\s+/)
+      .map(term => term.trim())
+      .filter(term => term.length >= 2)
+      .slice(0, 6)
+  )];
+
+  if (terms.length) {
+    filter.$and = terms.map(term => {
+      const rx = new RegExp(escapeRegex(term), 'i');
+
+      return {
+        $or: [
+          { title: rx },
+          { description: rx },
+          { category: rx },
+          { reference: rx },
+          { evidenceRefs: rx },
+          { 'source.reference': rx }
+        ]
+      };
+    });
+  }
+
+  return filter;
+}
+
+async function searchPublicKnowledge({
+  query,
+  limit = 20,
+  KnowledgeModel = KnowledgeContribution
+}) {
+  const safeLimit =
+    Math.max(
+      1,
+      Math.min(Number(limit) || 20, 100)
+    );
+
+  if (
+    KnowledgeModel?.db &&
+    Number(KnowledgeModel.db.readyState) !== 1
+  ) {
+    return [];
+  }
+
+  return KnowledgeModel
+    .find(buildPublicSearchFilter(query))
+    .sort({
+      publishedAt: -1,
+      reviewedAt: -1,
+      updatedAt: -1
+    })
+    .limit(safeLimit)
+    .lean();
+}
+
 async function searchVerifiedKnowledge({
   query,
   limit = 5,
@@ -577,7 +638,9 @@ module.exports = {
   commitKnowledgeCandidate,
 
   buildSearchFilter,
+  buildPublicSearchFilter,
   searchVerifiedKnowledge,
+  searchPublicKnowledge,
 
   effectiveVisibility,
   publicKnowledge,

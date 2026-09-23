@@ -15,6 +15,7 @@ const {
   previewKnowledge,
   commitKnowledgeCandidate,
   searchVerifiedKnowledge,
+  searchPublicKnowledge,
   publicKnowledge
 } = require('../services/zorgaxKnowledgeService');
 
@@ -71,7 +72,29 @@ router.post('/commit', authenticate, async (req, res) => {
   }
 });
 
-router.get('/search', optionalAuthenticate, async (req, res) => {
+router.get('/search', async (req, res) => {
+  try {
+    const items = await searchPublicKnowledge({
+      query: req.query.q || '',
+      limit: req.query.limit
+    });
+
+    return res.json({
+      success: true,
+      public_only: true,
+      verified_only: false,
+      scope: 'PUBLIC',
+      items: items.map(publicKnowledge)
+    });
+  } catch (_error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Knowledge pubblica non disponibile'
+    });
+  }
+});
+
+router.get('/verified-search', optionalAuthenticate, async (req, res) => {
   try {
     const includeInternal = req.userRole === 'admin';
 
@@ -90,7 +113,7 @@ router.get('/search', optionalAuthenticate, async (req, res) => {
   } catch (_error) {
     return res.status(500).json({
       success: false,
-      message: 'Knowledge interna non disponibile'
+      message: 'Knowledge verificata non disponibile'
     });
   }
 });
