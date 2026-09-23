@@ -8,9 +8,11 @@ describe('public professional profile page', () => {
   const vercel = JSON.parse(fs.readFileSync(path.join(__dirname, '../vercel.json'), 'utf8'));
   const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
 
-  test('renders public profile data from the unauthenticated endpoint', () => {
+  test('renders public profile data without authentication and has a www fallback', () => {
     expect(html).toContain("'/api/users/'+encodeURIComponent(username)+'/professional-profile'");
+    expect(html).toContain("https://www.myzubster.com");
     expect(html).not.toContain('Authorization');
+    expect(html).toContain('[hidden]{display:none!important}');
     expect(html).toContain('Competenze');
     expect(html).toContain('Esperienze');
     expect(html).toContain('Evidenze');
