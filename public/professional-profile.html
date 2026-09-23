@@ -15,7 +15,7 @@
 .meta{margin-top:18px;color:var(--muted);font-size:14px}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;margin-top:16px}.card{padding:22px;grid-column:span 12}
 @media(min-width:760px){.half{grid-column:span 6}}h2{margin:0 0 16px;font-size:21px}.items{display:grid;gap:12px}.item{padding:14px;border:1px solid #203047;border-radius:14px;background:#091421}
 .item strong{display:block;font-size:16px}.small{margin-top:5px;color:var(--muted);font-size:14px;line-height:1.5}.chips{display:flex;flex-wrap:wrap;gap:8px}.chip{border:1px solid #31506b;background:#0a1a2b;padding:7px 10px;border-radius:999px;color:#d7e8f5;font-size:13px}
-.evidence a{color:var(--accent)}.status{padding:28px;text-align:center;color:var(--muted)}.error{color:#fecaca}.footer{text-align:center;color:#7890a6;font-size:13px;margin-top:24px}.footer a{color:var(--accent)}
+[hidden]{display:none!important}.evidence a{color:var(--accent)}.status{padding:28px;text-align:center;color:var(--muted)}.error{color:#fecaca}.footer{text-align:center;color:#7890a6;font-size:13px;margin-top:24px}.footer a{color:var(--accent)}
 </style>
 </head>
 <body>
@@ -112,12 +112,29 @@
     content.hidden=false;
   }
 
+  async function fetchPublicProfile(){
+    const path='/api/users/'+encodeURIComponent(username)+'/professional-profile';
+    const origins=[location.origin];
+    if(location.origin!=='https://www.myzubster.com') origins.push('https://www.myzubster.com');
+
+    let lastError=new Error('Profilo pubblico non disponibile');
+    for(const origin of origins){
+      try{
+        const res=await fetch(origin+path,{headers:{Accept:'application/json'}});
+        const data=await res.json();
+        if(res.ok&&data.success)return data;
+        lastError=new Error(data.message||('Profilo pubblico non disponibile (HTTP '+res.status+')'));
+      }catch(error){
+        lastError=error;
+      }
+    }
+    throw lastError;
+  }
+
   async function load(){
     if(!username){status.className='status error';status.textContent='Username non specificato.';return;}
     try{
-      const res=await fetch('/api/users/'+encodeURIComponent(username)+'/professional-profile',{headers:{Accept:'application/json'}});
-      const data=await res.json();
-      if(!res.ok||!data.success)throw new Error(data.message||'Profilo pubblico non disponibile');
+      const data=await fetchPublicProfile();
       render(data.data.profile,data.data.username||username);
     }catch(error){
       status.className='status error';
