@@ -26,6 +26,7 @@ button:hover{filter:brightness(1.08)}
 .badges{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .badge{font-size:.72rem;font-weight:800;padding:5px 8px;border-radius:999px;border:1px solid}
 .badge.verified{color:#a5f4c4;border-color:#2f6549;background:#10271d}
+.badge.unverified{color:#ffe4a3;border-color:#7a5b20;background:#2b210c}
 .badge.public{color:#b9e8ff;border-color:#285978;background:#0e2230}
 .description{color:#d9e5f0;min-height:48px}
 .meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0}
