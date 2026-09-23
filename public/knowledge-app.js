@@ -5,10 +5,10 @@ const locale = document.body.dataset.locale === 'it' ? 'it' : 'en';
 
 const strings = {
   en: {
-    loading: 'Loading verified knowledge…',
-    unavailable: 'Verified Knowledge is temporarily unavailable.',
-    empty: 'No PUBLIC verified knowledge matches this search.',
-    count: n => `${n} verified ${n === 1 ? 'record' : 'records'}`,
+    loading: 'Loading public knowledge…',
+    unavailable: 'Public Knowledge is temporarily unavailable.',
+    empty: 'No PUBLIC MyZubster knowledge matches this search.',
+    count: n => `${n} public ${n === 1 ? 'record' : 'records'}`,
     version: 'Version',
     category: 'Category',
     source: 'Source',
@@ -20,10 +20,10 @@ const strings = {
     openReference: 'Open reference'
   },
   it: {
-    loading: 'Caricamento conoscenza verificata…',
-    unavailable: 'La Knowledge verificata non è temporaneamente disponibile.',
-    empty: 'Nessuna Knowledge PUBLIC e verificata corrisponde alla ricerca.',
-    count: n => `${n} ${n === 1 ? 'record verificato' : 'record verificati'}`,
+    loading: 'Caricamento conoscenza pubblica…',
+    unavailable: 'La Knowledge pubblica non è temporaneamente disponibile.',
+    empty: 'Nessuna conoscenza PUBLIC di MyZubster corrisponde alla ricerca.',
+    count: n => `${n} ${n === 1 ? 'conoscenza pubblica' : 'conoscenze pubbliche'}`,
     version: 'Versione',
     category: 'Categoria',
     source: 'Fonte',
@@ -96,8 +96,9 @@ function evidenceList(values) {
 function card(item) {
   const hash = String(item.contentHash || '');
   const shortHash = hash ? `${hash.slice(0, 14)}…` : '—';
-  const status = item.status || 'VERIFIED';
+  const status = item.status || 'UNREVIEWED';
   const visibility = item.visibility || 'PUBLIC';
+  const verified = ['APPROVED', 'REWARD_ELIGIBLE', 'REWARDED'].includes(status);
 
   return `
     <article class="card">
@@ -107,7 +108,7 @@ function card(item) {
           <h2>${esc(item.title || 'Untitled knowledge')}</h2>
         </div>
         <div class="badges">
-          <span class="badge verified">${esc(status)}</span>
+          <span class="badge ${verified ? 'verified' : 'unverified'}">${esc(status)}</span>
           <span class="badge public">${esc(visibility)}</span>
         </div>
       </div>
@@ -161,8 +162,7 @@ async function loadKnowledge() {
     const items = Array.isArray(payload.items)
       ? payload.items.filter(item =>
           item &&
-          item.visibility === 'PUBLIC' &&
-          ['APPROVED', 'REWARD_ELIGIBLE', 'REWARDED'].includes(item.status)
+          item.visibility === 'PUBLIC'
         )
       : [];
 
