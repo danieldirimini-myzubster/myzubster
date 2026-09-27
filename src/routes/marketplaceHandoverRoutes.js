@@ -85,9 +85,17 @@ router.post('/:handoverId/prepare-blockchain-commitment', authenticate, async (r
     return res.status(409).json({ success: false, message: 'Il passaggio deve essere RECORDED prima di preparare il commitment.' });
   }
 
-  const commitmentPolicy = canPrepareCommitment(
-    handover.evidenceClassification
-  );
+  // IMPORTANT: use the classification actually persisted in MongoDB.
+    // Mongoose hydration may apply schema defaults to legacy documents.
+    // A legacy record with no persisted classification must fail closed.
+    const rawEvidence = await MarketplaceHandover.collection.findOne(
+      { _id: handover._id },
+      { projection: { evidenceClassification: 1 } }
+    );
+
+    const commitmentPolicy = canPrepareCommitment(
+      rawEvidence?.evidenceClassification
+    );
 
   if (!commitmentPolicy.allowed) {
     return res.status(409).json({

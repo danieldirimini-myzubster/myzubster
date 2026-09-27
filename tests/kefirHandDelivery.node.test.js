@@ -43,7 +43,12 @@ test('kefir handover defaults to participant-only non-research evidence', () => 
 
 test('commitment preparation is governed by evidence classification', () => {
   assert.match(routes, /canPrepareCommitment/);
-  assert.match(routes, /handover\.evidenceClassification/);
+  assert.match(routes, /MarketplaceHandover\.collection\.findOne/);
+  assert.match(routes, /rawEvidence\?\.evidenceClassification/);
+  assert.doesNotMatch(
+    routes,
+    /canPrepareCommitment\(\s*handover\.evidenceClassification\s*\)/
+  );
   assert.match(routes, /if \(!commitmentPolicy\.allowed\)/);
   assert.match(routes, /code: commitmentPolicy\.code/);
 });
