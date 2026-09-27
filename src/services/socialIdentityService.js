@@ -1,15 +1,10 @@
 const crypto = require('crypto');
-const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const MetaverseCharacter = require('../../backend/src/models/MetaverseCharacter');
 const { notifyGoogleRegistration } = require('./adminNotificationEmailService');
+const { issueSession } = require('./authSessionService');
 
 const PROVIDERS = new Set(['google', 'github', 'facebook']);
-
-function jwtSecret() {
-  if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET non configurato');
-  return process.env.JWT_SECRET;
-}
 
 function safeName(value) {
   const cleaned = String(value || 'Explorer').trim().replace(/[^a-zA-Z0-9 _-]+/g, '').replace(/\s+/g, ' ').slice(0, 30);
@@ -67,7 +62,7 @@ function normalizeGithubSnapshot(snapshot) {
   return { name:String(snapshot.name || '').slice(0,180), bio:String(snapshot.bio || '').slice(0,1000), company:String(snapshot.company || '').slice(0,180), location:String(snapshot.location || '').slice(0,180), blog:String(snapshot.blog || '').slice(0,500), publicRepos:Number(snapshot.publicRepos || 0), followers:Number(snapshot.followers || 0), following:Number(snapshot.following || 0), repositories:repos, profileReadme:String(snapshot.profileReadme || '').slice(0,12000), capturedAt:new Date() };
 }
 
-async function upsertVerifiedAccount(provider, profile) {
+async function upsertVerifiedAccount(provider, profile, { request } = {}) {
   if (!PROVIDERS.has(provider)) throw new Error('Provider social non supportato');
   if (!profile?.id) throw new Error('Identità provider non verificata');
   const providerPath = `socialIdentities.${provider}.id`;
@@ -84,8 +79,13 @@ async function upsertVerifiedAccount(provider, profile) {
   if (profile.email) providerIdentity.email = String(profile.email).toLowerCase();
   user.socialIdentities[provider] = providerIdentity;
   if (provider === 'github') {
-    const previousSnapshot = user.github?.publicSnapshot;
-    user.github = { id:String(profile.id), login:profile.login, avatarUrl:profile.avatarUrl, profileUrl:profile.profileUrl, verifiedAt:new Date(), publicSnapshot:normalizeGithubSnapshot(profile.publicSnapshot) || previousSnapshot };
+    user.set('github.id', String(profile.id));
+    user.set('github.login', profile.login);
+    user.set('github.avatarUrl', profile.avatarUrl);
+    user.set('github.profileUrl', profile.profileUrl);
+    user.set('github.verifiedAt', new Date());
+    const publicSnapshot = normalizeGithubSnapshot(profile.publicSnapshot);
+    if (publicSnapshot) user.set('github.publicSnapshot', publicSnapshot);
   }
   if (shouldBootstrapAdmin(profile) && user.role !== 'admin') {
     user.role = 'admin';
@@ -97,8 +97,8 @@ async function upsertVerifiedAccount(provider, profile) {
     void notifyGoogleRegistration({ userId:String(user._id), email:profile.email || user.email, name:profile.name || user.username });
   }
   const character = await ensureCharacter(user, provider, profile);
-  const token = jwt.sign({ userId:user._id, username:user.username, role:user.role }, jwtSecret(), { expiresIn:process.env.JWT_EXPIRES_IN || '7d' });
-  return { user, character, token };
+  const session = await issueSession(user, request);
+  return { user, character, token:session.token, session };
 }
 
 module.exports = { upsertVerifiedAccount, _test:{ providerAccountEmail, normalizeGithubSnapshot, shouldBootstrapAdmin } };
