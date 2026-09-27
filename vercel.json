@@ -61,6 +61,7 @@
     {"src":"/facebook-zorgax\\.html/?","status":308,"headers":{"Location":"/facebook-zorgax"}},
     {"src":"/press/?","dest":"/public/press.html"},
     {"src":"/social-login/?","headers":{"X-Robots-Tag":"noindex, nofollow"},"dest":"/public/social-login.html"},
+    {"src":"/account/security/?","headers":{"X-Robots-Tag":"noindex, nofollow"},"dest":"/frontend/index.html"},
     {"src":"/zorgax-profile-onboarding/?","headers":{"X-Robots-Tag":"noindex, nofollow"},"dest":"/public/zorgax-profile-onboarding.html"},
     {"src":"/zorgax-email-profile/?","headers":{"X-Robots-Tag":"noindex, nofollow"},"dest":"/public/zorgax-email-profile.html"},
     {"src":"/facebook-zorgax/?","headers":{"X-Robots-Tag":"noindex, nofollow"},"dest":"/public/facebook-zorgax.html"},
@@ -130,3 +131,4 @@
     {"src":"/(.*)","dest":"/frontend/index.html"}
   ]
 }
+
