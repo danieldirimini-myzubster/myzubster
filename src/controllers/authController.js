@@ -1,6 +1,10 @@
 const User = require('../models/User');
 const MetaverseCharacter = require('../../backend/src/models/MetaverseCharacter');
 const jwt = require('jsonwebtoken');
+const {
+  issueSession,
+  setSessionCookie
+} = require('../services/authSessionService');
 
 function isValidMoneroAddress(value) {
   if (!value) return true;
@@ -278,11 +282,8 @@ exports.register = async (req, res) => {
       }
     }
 
-    const token = jwt.sign(
-      { userId: user._id, username: user.username, role: user.role },
-      jwtSecret(),
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-    );
+    const session = await issueSession(user, req);
+    setSessionCookie(res, session.token);
 
     res.status(201).json({
       success: true,
@@ -299,7 +300,11 @@ exports.register = async (req, res) => {
         },
         character: publicCharacter(character),
         characterAutomation: github?.id ? (character ? 'ready' : 'retry-on-login') : 'requires-verified-github',
-        token
+        token: session.token,
+        session: {
+          id: session.sessionId,
+          expiresAt: session.expiresAt
+        }
       }
     });
   } catch (error) {
@@ -331,11 +336,8 @@ exports.login = async (req, res) => {
       }
     }
 
-    const token = jwt.sign(
-      { userId: user._id, username: user.username, role: user.role },
-      jwtSecret(),
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-    );
+    const session = await issueSession(user, req);
+    setSessionCookie(res, session.token);
 
     res.json({
       success: true,
@@ -352,7 +354,11 @@ exports.login = async (req, res) => {
         },
         character: publicCharacter(character),
         characterAutomation: user.github?.id ? (character ? 'ready' : 'retry-next-login') : 'requires-verified-github',
-        token
+        token: session.token,
+        session: {
+          id: session.sessionId,
+          expiresAt: session.expiresAt
+        }
       }
     });
   } catch (error) {
