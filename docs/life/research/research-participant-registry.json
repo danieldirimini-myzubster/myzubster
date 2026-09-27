@@ -1,0 +1,21 @@
+{
+  "version": "myzubster_research_participant_registry_v0.1-draft",
+  "status": "DRAFT_NOT_APPROVED",
+  "scope": "Prospective MyZubster Living Lab research participation registry.",
+  "claimBoundary": "This registry does not imply university approval, ethics approval, EU LIFE participation, funding, partnership, employment, or research enrolment.",
+  "rules": {
+    "researchParticipationVoluntary": true,
+    "pilotConsentDoesNotEqualResearchConsent": true,
+    "marketplaceUseDoesNotEqualResearchConsent": true,
+    "contributionDoesNotEqualResearchConsent": true,
+    "explicitResearchConsentRequired": true,
+    "participantSpecificConsentRequired": true,
+    "pseudonymousResearchIdRequired": true,
+    "privateContactDetailsAllowed": false,
+    "walletAddressRequired": false,
+    "onchainConsentStorageAllowed": false,
+    "humanApprovalRequired": true
+  },
+  "researchParticipants": [],
+  "candidates": []
+}

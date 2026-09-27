@@ -1,0 +1,65 @@
+{
+  "version": "zorgax_research_candidate_registry_v1",
+  "scope": "Preparatory research candidate mapping for the internal MyZubster / Zorgax LIFE-aligned digital pilot.",
+  "claimBoundary": "Candidate status does not imply research participation, university affiliation, LIFE funding, EU endorsement, employment, payment, partnership or consortium membership.",
+  "rules": {
+    "researchParticipationVoluntary": true,
+    "pilotConsentDoesNotEqualResearchConsent": true,
+    "marketplaceUseDoesNotEqualResearchConsent": true,
+    "contributionDoesNotEqualResearchConsent": true,
+    "explicitResearchConsentRequired": true,
+    "participantSpecificConsentRequired": true,
+    "pseudonymousResearchIdRequired": true,
+    "privateContactDetailsAllowed": false,
+    "walletAddressRequired": false,
+    "onchainConsentStorageAllowed": false,
+    "automaticActivation": false,
+    "humanApprovalRequired": true
+  },
+  "candidates": [
+    {
+      "publicId": "Aming9303",
+      "sourceState": "PUBLIC_LIFE_CONTRIBUTION_ACTIVE",
+      "researchCandidateState": "ELIGIBLE_FOR_INVITATION",
+      "researchConsent": "NOT_CONFIRMED",
+      "researchParticipant": false,
+      "evidence": ["pull/859", "issue/534"]
+    },
+    {
+      "publicId": "laurentketterle-hub",
+      "researchCandidateState": "POTENTIAL_CANDIDATE",
+      "researchConsent": "NOT_CONFIRMED",
+      "researchParticipant": false
+    },
+    {
+      "publicId": "ghzhost",
+      "researchCandidateState": "POTENTIAL_CANDIDATE",
+      "researchConsent": "NOT_CONFIRMED",
+      "researchParticipant": false
+    },
+    {
+      "publicId": "wasim-builds",
+      "researchCandidateState": "POTENTIAL_CANDIDATE",
+      "researchConsent": "NOT_CONFIRMED",
+      "researchParticipant": false
+    },
+    {
+      "publicId": "foxxx009",
+      "researchCandidateState": "POTENTIAL_CANDIDATE",
+      "researchConsent": "NOT_CONFIRMED",
+      "researchParticipant": false
+    },
+    {
+      "publicId": "leanworld7-netizen",
+      "researchCandidateState": "POTENTIAL_CANDIDATE",
+      "researchConsent": "NOT_CONFIRMED",
+      "researchParticipant": false
+    },
+    {
+      "publicId": "rafaio1",
+      "researchCandidateState": "POTENTIAL_CANDIDATE",
+      "researchConsent": "NOT_CONFIRMED",
+      "researchParticipant": false
+    }
+  ]
+}
