@@ -8,8 +8,16 @@
   ],
   "routes": [
     {
+      "src": "/account/security/?",
+      "headers": {
+        "X-Robots-Tag": "noindex, nofollow"
+      },
+      "dest": "/index.html"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }
   ]
 }
+
