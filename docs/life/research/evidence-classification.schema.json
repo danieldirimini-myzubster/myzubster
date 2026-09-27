@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://myzubster.com/schemas/evidence-classification-v1.json",
+  "title": "MyZubster Evidence Classification v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "evidenceClass",
+    "purpose",
+    "disclosureAudience",
+    "containsDirectIdentifier",
+    "containsPseudonymousIdentifier",
+    "containsLocation",
+    "containsPaymentMetadata",
+    "researchEligible",
+    "publicAnchoringAllowed"
+  ],
+  "properties": {
+    "evidenceClass": {
+      "enum": [
+        "PUBLIC",
+        "RESTRICTED",
+        "PARTICIPANT_ONLY",
+        "EPHEMERAL"
+      ]
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 1
+    },
+    "retentionPolicy": {
+      "type": ["string", "null"]
+    },
+    "disclosureAudience": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "containsDirectIdentifier": {
+      "type": "boolean"
+    },
+    "containsPseudonymousIdentifier": {
+      "type": "boolean"
+    },
+    "containsLocation": {
+      "type": "boolean"
+    },
+    "containsPaymentMetadata": {
+      "type": "boolean"
+    },
+    "researchEligible": {
+      "type": "boolean"
+    },
+    "publicAnchoringAllowed": {
+      "type": "boolean"
+    }
+  }
+}
