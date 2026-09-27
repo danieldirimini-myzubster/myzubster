@@ -15,6 +15,47 @@ const marketplaceHandoverSchema = new mongoose.Schema({
   handedOverAt: { type: Date, default: null },
   receivedAt: { type: Date, default: null },
   recordedAt: { type: Date, default: null },
+  evidenceClassification: {
+    evidenceClass: {
+      type: String,
+      enum: ['PUBLIC', 'RESTRICTED', 'PARTICIPANT_ONLY', 'EPHEMERAL'],
+      default: 'PARTICIPANT_ONLY',
+      required: true
+    },
+    purpose: {
+      type: String,
+      default: 'kefir_hand_delivery_evidence'
+    },
+    disclosureAudience: {
+      type: [String],
+      default: ['donor', 'recipient']
+    },
+    containsDirectIdentifier: {
+      type: Boolean,
+      default: false
+    },
+    containsPseudonymousIdentifier: {
+      type: Boolean,
+      default: true
+    },
+    containsLocation: {
+      type: Boolean,
+      default: false
+    },
+    containsPaymentMetadata: {
+      type: Boolean,
+      default: false
+    },
+    researchEligible: {
+      type: Boolean,
+      default: false
+    },
+    publicAnchoringAllowed: {
+      type: Boolean,
+      default: false
+    }
+  },
+
   blockchainCommitment: {
     schema: { type: String, default: null },
     algorithm: { type: String, default: null },

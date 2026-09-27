@@ -4,6 +4,9 @@ const router = express.Router();
 const { authenticate } = require('../middleware/auth');
 const MarketplaceListing = require('../models/MarketplaceListing');
 const MarketplaceHandover = require('../models/MarketplaceHandover');
+const {
+  canPrepareCommitment
+} = require('../services/evidenceClassificationPolicy');
 
 function view(handover) {
   const item = handover.toObject ? handover.toObject() : handover;
@@ -80,6 +83,18 @@ router.post('/:handoverId/prepare-blockchain-commitment', authenticate, async (r
   if (!participant) return res.status(403).json({ success: false, message: 'Solo i partecipanti possono preparare il commitment.' });
   if (handover.state !== 'RECORDED' || !handover.recordedAt) {
     return res.status(409).json({ success: false, message: 'Il passaggio deve essere RECORDED prima di preparare il commitment.' });
+  }
+
+  const commitmentPolicy = canPrepareCommitment(
+    handover.evidenceClassification
+  );
+
+  if (!commitmentPolicy.allowed) {
+    return res.status(409).json({
+      success: false,
+      code: commitmentPolicy.code,
+      message: 'La classificazione dell’evidenza non consente la preparazione del commitment.'
+    });
   }
 
   const payload = canonicalCommitmentPayload(handover);

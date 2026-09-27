@@ -32,3 +32,18 @@ test('free handover never implies payment or blockchain evidence', () => {
   assert.match(routes, /onchainRecorded: false/);
   assert.doesNotMatch(routes, /transactionId|txHash|charge|checkout|conversion/);
 });
+
+test('kefir handover defaults to participant-only non-research evidence', () => {
+  assert.match(model, /evidenceClassification/);
+  assert.match(model, /default: 'PARTICIPANT_ONLY'/);
+  assert.match(model, /default: 'kefir_hand_delivery_evidence'/);
+  assert.match(model, /researchEligible:[\s\S]*?default: false/);
+  assert.match(model, /publicAnchoringAllowed:[\s\S]*?default: false/);
+});
+
+test('commitment preparation is governed by evidence classification', () => {
+  assert.match(routes, /canPrepareCommitment/);
+  assert.match(routes, /handover\.evidenceClassification/);
+  assert.match(routes, /if \(!commitmentPolicy\.allowed\)/);
+  assert.match(routes, /code: commitmentPolicy\.code/);
+});
