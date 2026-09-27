@@ -319,3 +319,61 @@ describe('repo defaults', () => {
     expect(data.balances.xmr.amount).toBeNull();
   });
 });
+
+describe('treasury conversion provider boundary', () => {
+  test('exposes a preloaded treasury conversion without performing database IO', () => {
+    const conversion = {
+      configured: true,
+      reason: null,
+      items: [{
+        purpose: 'BOUNTY_SETTLEMENT',
+        provider: 'SimpleSwap',
+        source: {
+          asset: 'BTC',
+          amount: '0.000464',
+          txId: '2ea0bc209a2d5bcfbf520f830f1a39dee0691e47c461afc316e5aeb2e83cdd2d'
+        },
+        target: {
+          asset: 'ETH',
+          network: 'ethereum-mainnet',
+          amount: '0.014355678390291923',
+          txId: '0x62b58e69931ef6046d8f68df39c118fe0b1fc7234b88c780d26a8b53fdcddcc6'
+        },
+        state: 'CONVERSION_COMPLETED',
+        verification: {
+          status: 'VERIFIED'
+        }
+      }]
+    };
+
+    const result = service.buildDashboard({
+      conversionProvider: () => conversion
+    });
+
+    expect(result.layers.conversion.configured).toBe(true);
+    expect(result.layers.conversion.items).toHaveLength(1);
+    expect(result.layers.conversion.items[0].purpose)
+      .toBe('BOUNTY_SETTLEMENT');
+    expect(result.layers.conversion.items[0].state)
+      .toBe('CONVERSION_COMPLETED');
+    expect(result.layers.conversion.items[0].target.asset)
+      .toBe('ETH');
+  });
+
+  test('conversion provider failure is reported as unavailable instead of breaking dashboard', () => {
+    const result = service.buildDashboard({
+      conversionProvider: () => {
+        throw new Error('conversion repository unavailable');
+      }
+    });
+
+    expect(result.layers.conversion.configured).toBe(false);
+    expect(result.layers.conversion.items).toEqual([]);
+    expect(result.layers.conversion.reason)
+      .toContain('conversion repository unavailable');
+
+    expect(result.warnings.some(
+      warning => warning.includes('conversion provider failed')
+    )).toBe(true);
+  });
+});
