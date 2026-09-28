@@ -128,10 +128,17 @@ function refreshTokenFromRequest(req) {
   return namedCookie(req, REFRESH_COOKIE);
 }
 
-function tokenFromRequest(req) {
+function tokenCredentialFromRequest(req) {
   const authHeader = String(req.headers?.authorization || '');
-  if (authHeader.startsWith('Bearer ')) return authHeader.slice(7).trim();
-  return cookieToken(req);
+  if (authHeader.startsWith('Bearer ')) {
+    return { token: authHeader.slice(7).trim(), source: 'bearer' };
+  }
+  const token = cookieToken(req);
+  return { token, source: token ? 'cookie' : 'none' };
+}
+
+function tokenFromRequest(req) {
+  return tokenCredentialFromRequest(req).token;
 }
 
 function refreshTokenSecret() {
@@ -340,6 +347,7 @@ module.exports = {
   clearSessionCookie,
   clearRefreshCookie,
   clearSessionCookies,
+  tokenCredentialFromRequest,
   tokenFromRequest,
   refreshTokenFromRequest,
   hashRefreshToken,
