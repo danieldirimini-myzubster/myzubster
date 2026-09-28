@@ -10,6 +10,7 @@ const User = require('../src/models/User');
 const AuthSession = require('../src/models/AuthSession');
 const MetaverseCharacter = require('../backend/src/models/MetaverseCharacter');
 const { upsertVerifiedAccount } = require('../src/services/socialIdentityService');
+const { rotateRefreshToken } = require('../src/services/authSessionService');
 
 let mongo;
 
@@ -39,6 +40,7 @@ test.each([
   const result = await upsertVerifiedAccount(provider, profile);
   expect(result.token).toBeTruthy();
   expect(result.session.sessionId).toBeTruthy();
+  expect(result.session.refreshToken).toMatch(/^myzr\./);
   expect(result.user.isVerified).toBe(true);
   expect(result.user.socialIdentities[provider].id).toBe(profile.id);
   expect(result.character.identityStatus).toBe('account-linked');
@@ -51,6 +53,30 @@ test.each([
   expect(await User.countDocuments()).toBe(1);
   expect(await AuthSession.countDocuments()).toBe(2);
   expect(await MetaverseCharacter.countDocuments()).toBe(1);
+});
+
+test('persistent refresh rotation rejects replay and revokes the complete session', async () => {
+  const result = await upsertVerifiedAccount('google', {
+    id: 'google-refresh-1',
+    email: 'refresh@example.test',
+    name: 'Refresh User'
+  });
+  const persisted = await AuthSession.findOne({ sessionId: result.session.sessionId })
+    .select('+refreshTokenHash +usedRefreshTokenHashes')
+    .lean();
+
+  expect(persisted.refreshTokenHash).toMatch(/^[a-f0-9]{64}$/);
+  expect(persisted.refreshTokenHash).not.toBe(result.session.refreshToken);
+
+  const rotated = await rotateRefreshToken(result.session.refreshToken);
+  expect(rotated.refreshToken).not.toBe(result.session.refreshToken);
+
+  await expect(rotateRefreshToken(result.session.refreshToken))
+    .rejects.toMatchObject({ code: 'AUTH_REFRESH_REPLAY' });
+
+  const revoked = await AuthSession.findOne({ sessionId: result.session.sessionId }).lean();
+  expect(revoked.revokedAt).toEqual(expect.any(Date));
+  expect(revoked.revokedReason).toBe('refresh-token-replay');
 });
 
 test('Facebook without an email receives a stable private relay identity', async () => {
@@ -69,3 +95,4 @@ test('unsupported provider cannot create a verified identity', async () => {
   await expect(upsertVerifiedAccount('instagram', { id: 'ig-1', email: 'ig@example.test' }))
     .rejects.toThrow('Provider social non supportato');
 });
+
