@@ -13,6 +13,7 @@ import {
 } from '../api/metaverse';
 import MetaverseExperiencePanel from '../components/MetaverseExperiencePanel';
 import { conversionContext, trackConversionOnce } from '../analytics/conversionAnalytics';
+import { bindAuthExpiryRedirect } from '../auth/authExpiryRedirect';
 import './MetaversePage.css';
 
 const STORAGE_KEY = 'myz-metaverse-profile-v1';
@@ -219,6 +220,8 @@ function MetaversePage() {
   const [featuredCharacters, setFeaturedCharacters] = useState([]);
   const [discoverableRooms, setDiscoverableRooms] = useState([]);
   const [visitedLandmarks, setVisitedLandmarks] = useState([]);
+
+  useEffect(() => bindAuthExpiryRedirect(), []);
 
   useEffect(() => {
     trackConversionOnce('metaverse_loaded', conversionContext({ surface: 'neon_plaza' }));
