@@ -36,6 +36,26 @@ const AuthSessionSchema = new mongoose.Schema({
     type: Date,
     required: true
   },
+  refreshTokenHash: {
+    type: String,
+    maxlength: 64,
+    select: false,
+    default: null
+  },
+  usedRefreshTokenHashes: {
+    type: [{ type: String, maxlength: 64 }],
+    select: false,
+    default: []
+  },
+  refreshTokenVersion: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+  refreshRotatedAt: {
+    type: Date,
+    default: null
+  },
   revokedAt: {
     type: Date,
     default: null,
@@ -50,6 +70,8 @@ const AuthSessionSchema = new mongoose.Schema({
 }, { versionKey: false });
 
 AuthSessionSchema.index({ userId: 1, revokedAt: 1, expiresAt: 1 });
+AuthSessionSchema.index({ sessionId: 1, refreshTokenHash: 1 });
 AuthSessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 module.exports = mongoose.model('AuthSession', AuthSessionSchema);
+
