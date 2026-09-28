@@ -55,6 +55,15 @@ export function logoutCurrentSession() {
   return authRequest('/api/auth/logout', { method: 'POST' });
 }
 
+export async function refreshAuthSession() {
+  const payload = await authRequest('/api/auth/refresh', {
+    method: 'POST',
+    body: '{}'
+  });
+  if (payload.data?.token) localStorage.setItem('myzubster-token', payload.data.token);
+  return payload;
+}
+
 export function clearBrowserAuth() {
   for (const key of TOKEN_KEYS) localStorage.removeItem(key);
   localStorage.removeItem('myzubster-user');
