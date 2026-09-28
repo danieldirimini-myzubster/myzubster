@@ -20,11 +20,14 @@ function response() {
   return res;
 }
 
-function request(token, source = 'bearer') {
+function request(token, source = 'bearer', extra = {}) {
   const headers = source === 'cookie'
     ? { cookie: `${SESSION_COOKIE}=${encodeURIComponent(token)}` }
     : { authorization: `Bearer ${token}` };
+  Object.assign(headers, extra.headers || {});
   return {
+    method: extra.method || 'GET',
+    protocol: extra.protocol || 'https',
     headers,
     socket: { remoteAddress: '127.0.0.1' },
     get(name) {
@@ -113,3 +116,61 @@ test('authenticate returns a stable public error for an expired token', async ()
   }));
   warning.mockRestore();
 });
+
+test('authenticate rejects a cross-site cookie mutation before session lookup', async () => {
+  const token = jwt.sign(
+    { userId: 'user-1', role: 'user', sid: 'session-1' },
+    process.env.JWT_SECRET,
+    { expiresIn: '5m' }
+  );
+  const req = request(token, 'cookie', {
+    method: 'POST',
+    headers: {
+      host: 'www.myzubster.com',
+      origin: 'https://attacker.example',
+      'sec-fetch-site': 'cross-site'
+    }
+  });
+  const res = response();
+  const next = jest.fn();
+
+  await authenticate(req, res, next);
+
+  expect(next).not.toHaveBeenCalled();
+  expect(AuthSession.findOne).not.toHaveBeenCalled();
+  expect(res.status).toHaveBeenCalledWith(403);
+  expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+    error: expect.objectContaining({ code: 'AUTH_CSRF_REJECTED' })
+  }));
+});
+
+test('authenticate keeps bearer mutations independent from browser CSRF state', async () => {
+  const token = jwt.sign(
+    { userId: 'user-1', role: 'user', sid: 'session-1' },
+    process.env.JWT_SECRET,
+    { expiresIn: '5m' }
+  );
+  AuthSession.findOne.mockReturnValue({
+    lean: jest.fn().mockResolvedValue({
+      sessionId: 'session-1',
+      userId: 'user-1',
+      lastSeenAt: new Date()
+    })
+  });
+  const req = request(token, 'bearer', {
+    method: 'POST',
+    headers: {
+      host: 'www.myzubster.com',
+      origin: 'https://attacker.example',
+      'sec-fetch-site': 'cross-site'
+    }
+  });
+  const res = response();
+  const next = jest.fn();
+
+  await authenticate(req, res, next);
+
+  expect(next).toHaveBeenCalledTimes(1);
+  expect(req.authTokenSource).toBe('bearer');
+});
+
