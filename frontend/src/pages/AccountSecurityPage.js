@@ -52,7 +52,7 @@ function AccountSecurityPage() {
     if (!window.confirm(
       session.current
         ? 'Vuoi terminare questa sessione? Dovrai accedere di nuovo.'
-        : 'Vuoi revocare l'accesso a questo dispositivo?'
+        : "Vuoi revocare l'accesso a questo dispositivo?"
     )) return;
 
     setWorkingId(session.id);
@@ -107,16 +107,16 @@ function AccountSecurityPage() {
   return (
     <main className="account-security-page">
       <header className="account-security-header">
-        <a href="/metaverse"> Neon Plaza</a>
+        <a href="/metaverse">← Neon Plaza</a>
         <a href="/">Home MyZubster</a>
       </header>
 
       <section className="account-security-card account-security-hero">
-        <div className="account-security-kicker">MYZUBSTER � ACCOUNT SECURITY</div>
+        <div className="account-security-kicker">MYZUBSTER · ACCOUNT SECURITY</div>
         <h1>Sessioni e dispositivi</h1>
         <p>
-          Controlla dove � attivo il tuo account e revoca gli accessi che non riconosci.
-          Gli indirizzi IP non vengono mostrati n� memorizzati in chiaro.
+          Controlla dove è attivo il tuo account e revoca gli accessi che non riconosci.
+          Gli indirizzi IP non vengono mostrati né memorizzati in chiaro.
         </p>
         {account && (
           <div className="account-security-identity">
@@ -153,7 +153,7 @@ function AccountSecurityPage() {
                   {session.current && <span>QUESTO DISPOSITIVO</span>}
                 </div>
                 <dl>
-                  <div><dt>Ultima attivit�</dt><dd>{formatSessionDate(session.lastSeenAt)}</dd></div>
+                  <div><dt>Ultima attività</dt><dd>{formatSessionDate(session.lastSeenAt)}</dd></div>
                   <div><dt>Creata</dt><dd>{formatSessionDate(session.createdAt)}</dd></div>
                   <div><dt>Scadenza</dt><dd>{formatSessionDate(session.expiresAt)}</dd></div>
                 </dl>
@@ -164,7 +164,7 @@ function AccountSecurityPage() {
                 disabled={Boolean(workingId)}
                 onClick={() => revoke(session)}
               >
-                {workingId === session.id ? 'Revoca.' : session.current ? 'Termina' : 'Revoca'}
+                {workingId === session.id ? 'Revoca…' : session.current ? 'Termina' : 'Revoca'}
               </button>
             </article>
           ))}
@@ -178,7 +178,7 @@ function AccountSecurityPage() {
           <p>Revoca la sessione server, cancella il cookie sicuro e rimuove i dati di accesso locali.</p>
         </div>
         <button type="button" className="account-security-danger" onClick={logout} disabled={Boolean(workingId)}>
-          {workingId === 'logout' ? 'Uscita.' : 'Esci'}
+          {workingId === 'logout' ? 'Uscita…' : 'Esci'}
         </button>
       </section>
     </main>

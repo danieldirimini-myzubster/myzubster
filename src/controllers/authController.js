@@ -1,5 +1,7 @@
 const User = require('../models/User');
-const MetaverseCharacter = require('../../backend/src/models/MetaverseCharacter');
+const mongoose = require('mongoose');
+const { createMetaverseCharacterModel } = require('../../backend/src/models/MetaverseCharacter');
+const MetaverseCharacter = createMetaverseCharacterModel(mongoose);
 const jwt = require('jsonwebtoken');
 const {
   issueSession,

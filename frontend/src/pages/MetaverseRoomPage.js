@@ -237,7 +237,7 @@ function MetaverseRoomPage({ roomKey }) {
     try {
       const result = await requestMetaverseStageAccess(session.id);
       setStage(result.stage);
-      setMessage('Richiesta di parola inviata all'host.');
+      setMessage('Richiesta di parola inviata all’host.');
     } catch (error) { setMessage(error.message); }
   };
 
@@ -346,7 +346,7 @@ function MetaverseRoomPage({ roomKey }) {
       setRoomMessages((current) => current.map((item) => (
         item.id === messageId ? { ...item, reportedByMe: true } : item
       )));
-      setMessage('Segnalazione inviata all'host.');
+      setMessage('Segnalazione inviata all’host.');
     } catch (error) {
       setMessage(error.status === 429 ? 'Hai inviato troppe segnalazioni. Riprova tra un minuto.' : error.message);
     }
@@ -365,7 +365,7 @@ function MetaverseRoomPage({ roomKey }) {
       const result = await moderateMetaverseReportedMessage(session.id, report.id);
       setMessageReports((current) => current.filter((item) => item.message?.id !== result.messageId));
       setRoomMessages((current) => current.filter((item) => item.id !== result.messageId));
-      setMessage(result.removed ? 'Messaggio rimosso e segnalazioni chiuse.' : 'Segnalazioni chiuse: il messaggio non era pi� disponibile.');
+      setMessage(result.removed ? 'Messaggio rimosso e segnalazioni chiuse.' : 'Segnalazioni chiuse: il messaggio non era più disponibile.');
     } catch (error) { setMessage(error.message); }
   };
 
@@ -396,7 +396,7 @@ function MetaverseRoomPage({ roomKey }) {
       const result = await joinMetaverseRoomSession(session.id);
       setSession(result.session);
       setJoined(true);
-      setMessage('Accesso autorizzato. Il client realtime della stanza � ancora sperimentale e non viene avviato da questa pagina.');
+      setMessage('Accesso autorizzato. Il client realtime della stanza è ancora sperimentale e non viene avviato da questa pagina.');
     } catch (error) {
       setMessage(error.status === 401 ? 'Accedi nuovamente per entrare nella stanza.' : error.message);
     } finally {
@@ -429,7 +429,7 @@ function MetaverseRoomPage({ roomKey }) {
       setSession(result.session);
       setRoom((current) => ({ ...current, state: 'ended' }));
       setJoined(false);
-      setMessage('Sessione conclusa dall'host.');
+      setMessage('Sessione conclusa dall’host.');
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -468,7 +468,7 @@ function MetaverseRoomPage({ roomKey }) {
       url.searchParams.set('invite', result.inviteCode);
       setInviteUrl(url.toString());
       setInviteStatus({ active: true, expiresAt: result.expiresAt });
-      setMessage('Invito creato. Scade tra 24 ore e pu� essere usato una sola volta.');
+      setMessage('Invito creato. Scade tra 24 ore e può essere usato una sola volta.');
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -534,7 +534,7 @@ function MetaverseRoomPage({ roomKey }) {
   };
 
   if (status === 'loading') {
-    return <main className="metaverse-entry-shell"><section className="metaverse-entry-card"><p>Caricamento stanza.</p></section></main>;
+    return <main className="metaverse-entry-shell"><section className="metaverse-entry-card"><p>Caricamento stanza…</p></section></main>;
   }
 
   if (status === 'error' || !room) {
@@ -545,8 +545,8 @@ function MetaverseRoomPage({ roomKey }) {
         <section className="metaverse-entry-card">
           <h2>Stanza non disponibile</h2>
           <p>{message}</p>
-          {pendingInvite && !authenticated && <p><a href={`/social-login?returnTo=${returnTo}`}>Accedi per riscattare l'invito privato</a></p>}
-          <a href="/metaverse"> Torna a Neon Plaza</a>
+          {pendingInvite && !authenticated && <p><a href={`/social-login?returnTo=${returnTo}`}>Accedi per riscattare l’invito privato</a></p>}
+          <a href="/metaverse">← Torna a Neon Plaza</a>
         </section>
       </main>
     );
@@ -557,11 +557,11 @@ function MetaverseRoomPage({ roomKey }) {
   return (
     <main className="metaverse-entry-shell">
       <section className="metaverse-entry-card">
-        <div className="metaverse-kicker">MYZUBSTER WORLD � STANZA SPERIMENTALE</div>
+        <div className="metaverse-kicker">MYZUBSTER WORLD · STANZA SPERIMENTALE</div>
         <h2>{room.name}</h2>
         <p><strong>Stato:</strong> {stateLabel(room.state)}</p>
         <p><strong>Accesso:</strong> {room.accessPolicy}</p>
-        <p><strong>Capacit�:</strong> {room.capacity}</p>
+        <p><strong>Capacità:</strong> {room.capacity}</p>
         <p><strong>Versione scena:</strong> {room.sceneManifestVersion}</p>
         <p><strong>Programmazione:</strong> {room.scheduledFor ? new Date(room.scheduledFor).toLocaleString('it-IT') : 'Avvio immediato'}</p>
         {canManage && (
@@ -571,8 +571,8 @@ function MetaverseRoomPage({ roomKey }) {
             {['draft', 'published'].includes(room.state) && !session && (
               <form className="metaverse-form" onSubmit={saveSettings}>
                 <label>Accesso<select value={editAccess} onChange={(event) => setEditAccess(event.target.value)}><option value="public">Pubblico</option><option value="authenticated">Solo account</option><option value="private">Privato</option></select></label>
-                <label>Capacit�<input type="number" min="1" max="500" value={editCapacity} onChange={(event) => setEditCapacity(event.target.value)} /></label>
-                <label>Palco<select value={editStagePolicy} onChange={(event) => setEditStagePolicy(event.target.value)}><option value="host-only">Solo host</option><option value="host-approved">Richieste approvate dall'host</option></select></label>
+                <label>Capacità<input type="number" min="1" max="500" value={editCapacity} onChange={(event) => setEditCapacity(event.target.value)} /></label>
+                <label>Palco<select value={editStagePolicy} onChange={(event) => setEditStagePolicy(event.target.value)}><option value="host-only">Solo host</option><option value="host-approved">Richieste approvate dall’host</option></select></label>
                 <label>Data e ora della sessione<input type="datetime-local" value={editScheduledFor} onChange={(event) => setEditScheduledFor(event.target.value)} /></label>
                 <button type="submit" disabled={joining}>Salva impostazioni</button>
               </form>
@@ -590,7 +590,7 @@ function MetaverseRoomPage({ roomKey }) {
             )}
             {blockedParticipants.length > 0 && (
               <div className="metaverse-panel"><h4>Account bloccati</h4>{blockedParticipants.map((participant) => (
-                <div key={participant.ref}><span>{participant.characterName} � {participant.archetype}</span> <button type="button" onClick={() => unblockParticipant(participant.ref)} disabled={joining}>Ripristina accesso</button></div>
+                <div key={participant.ref}><span>{participant.characterName} · {participant.archetype}</span> <button type="button" onClick={() => unblockParticipant(participant.ref)} disabled={joining}>Ripristina accesso</button></div>
               ))}</div>
             )}
             {room.state === 'draft' && <button className="metaverse-primary" onClick={manageLifecycle} disabled={joining}>Pubblica stanza</button>}
@@ -605,7 +605,7 @@ function MetaverseRoomPage({ roomKey }) {
             <p>{session.participantCount} partecipanti su {session.capacity}</p>
             {live && authenticated && !joined && (
               <button className="metaverse-primary" onClick={join} disabled={joining}>
-                {joining ? 'Accesso.' : 'Richiedi accesso alla sessione'}
+                {joining ? 'Accesso…' : 'Richiedi accesso alla sessione'}
               </button>
             )}
             {live && joined && <button onClick={leave} disabled={joining}>Lascia sessione</button>}
@@ -615,21 +615,21 @@ function MetaverseRoomPage({ roomKey }) {
             {live && canManage && <button onClick={end} disabled={joining}>Concludi sessione</button>}
             {live && canManage && stageSpeakers.length > 0 && (
               <div className="metaverse-panel"><h4>Partecipanti sul palco</h4>{stageSpeakers.map((speaker) => (
-                <div key={speaker.ref}><span>{speaker.characterName} � {speaker.archetype}</span> <button onClick={() => revokeSpeaker(speaker.ref)}>Revoca palco</button></div>
+                <div key={speaker.ref}><span>{speaker.characterName} · {speaker.archetype}</span> <button onClick={() => revokeSpeaker(speaker.ref)}>Revoca palco</button></div>
               ))}</div>
             )}
             {live && canManage && stageRequests.length > 0 && (
               <div className="metaverse-panel"><h4>Richieste di parola</h4>{stageRequests.map((request) => (
-                <div key={request.ref}><span>{request.characterName} � {request.archetype}</span> <button onClick={() => resolveStage(request.ref, true)}>Approva</button> <button onClick={() => resolveStage(request.ref, false)}>Rifiuta</button></div>
+                <div key={request.ref}><span>{request.characterName} · {request.archetype}</span> <button onClick={() => resolveStage(request.ref, true)}>Approva</button> <button onClick={() => resolveStage(request.ref, false)}>Rifiuta</button></div>
               ))}</div>
             )}
             {live && canManage && participants.length > 0 && (
               <div className="metaverse-panel"><h4>Moderazione partecipanti</h4>{participants.map((participant) => (
-                <div key={participant.ref}><span>{participant.characterName} � {participant.archetype}</span> <button onClick={() => moderateParticipant(participant.ref, false)} disabled={joining}>Rimuovi</button> <button onClick={() => moderateParticipant(participant.ref, true)} disabled={joining}>Rimuovi e blocca</button></div>
+                <div key={participant.ref}><span>{participant.characterName} · {participant.archetype}</span> <button onClick={() => moderateParticipant(participant.ref, false)} disabled={joining}>Rimuovi</button> <button onClick={() => moderateParticipant(participant.ref, true)} disabled={joining}>Rimuovi e blocca</button></div>
               ))}</div>
             )}
             {live && !authenticated && <p><a href="/social-login?returnTo=%2Fmetaverse">Accedi per entrare nella sessione.</a></p>}
-            {!live && <p className="metaverse-muted">La sessione non � ancora live.</p>}
+            {!live && <p className="metaverse-muted">La sessione non è ancora live.</p>}
           </div>
         ) : (
           <p className="metaverse-muted">Nessuna sessione programmata o live.</p>
@@ -644,13 +644,13 @@ function MetaverseRoomPage({ roomKey }) {
           </section>
         )}
         {session && canManage && messageReports.length > 0 && (
-          <section className="metaverse-panel"><h3>Segnalazioni chat</h3>{messageReports.map((report) => <div key={report.id}><p><strong>{report.count} {report.count === 1 ? 'segnalazione' : 'segnalazioni'}</strong> � {report.reasons.join(', ')} � {report.message ? `${report.message.characterName}: ${report.message.text}` : 'Messaggio non pi� disponibile'}</p>{report.message && <button type="button" onClick={() => removeReportedMessage(report)}>Rimuovi messaggio e chiudi</button>} <button type="button" onClick={() => resolveMessageReport(report.id)}>Segna come risolta</button></div>)}</section>
+          <section className="metaverse-panel"><h3>Segnalazioni chat</h3>{messageReports.map((report) => <div key={report.id}><p><strong>{report.count} {report.count === 1 ? 'segnalazione' : 'segnalazioni'}</strong> · {report.reasons.join(', ')} · {report.message ? `${report.message.characterName}: ${report.message.text}` : 'Messaggio non più disponibile'}</p>{report.message && <button type="button" onClick={() => removeReportedMessage(report)}>Rimuovi messaggio e chiudi</button>} <button type="button" onClick={() => resolveMessageReport(report.id)}>Segna come risolta</button></div>)}</section>
         )}
         {session && canManage && moderationHistory.length > 0 && (
           <section className="metaverse-panel">
             <h3>Registro moderazione</h3>
             <ul>{moderationHistory.map((entry) => (
-              <li key={entry.id}>{entry.resolution === 'message_removed' ? 'Messaggio rimosso' : 'Segnalazione archiviata'} � {entry.reason} � {new Date(entry.resolvedAt).toLocaleString('it-IT')}</li>
+              <li key={entry.id}>{entry.resolution === 'message_removed' ? 'Messaggio rimosso' : 'Segnalazione archiviata'} · {entry.reason} · {new Date(entry.resolvedAt).toLocaleString('it-IT')}</li>
             ))}</ul>
             <small className="metaverse-muted">Registro anonimo conservato per un massimo di sette giorni.</small>
           </section>
@@ -664,8 +664,8 @@ function MetaverseRoomPage({ roomKey }) {
               <ol className="metaverse-check-list">
                 {events.map((event) => (
                   <li key={event.id}>
-                    <span>{event.type === 'session_started' ? '??' : event.type === 'session_ended' ? '??' : event.type === 'participant_joined' ? '?' : event.type === 'participant_left' ? '?' : '???'}</span>
-                    <span>{event.type.replaceAll('_', ' ')} � {event.participantCount} partecipanti</span>
+                    <span>{event.type === 'session_started' ? '▶️' : event.type === 'session_ended' ? '⏹️' : event.type === 'participant_joined' ? '➕' : event.type === 'participant_left' ? '➖' : '🗂️'}</span>
+                    <span>{event.type.replaceAll('_', ' ')} · {event.participantCount} partecipanti</span>
                   </li>
                 ))}
               </ol>
@@ -674,7 +674,7 @@ function MetaverseRoomPage({ roomKey }) {
           </section>
         )}
         {message && <div className="metaverse-error" aria-live="polite">{message}</div>}
-        <p><a href="/metaverse"> Torna a Neon Plaza</a></p>
+        <p><a href="/metaverse">← Torna a Neon Plaza</a></p>
         <small className="metaverse-muted">Questa pagina verifica accesso e ciclo di vita sul server. Rendering realtime e scena immersiva non sono ancora collegati.</small>
       </section>
     </main>
@@ -683,4 +683,3 @@ function MetaverseRoomPage({ roomKey }) {
 
 export { ROOM_SYNC_INTERVAL_MS, stateLabel, toLocalDateTimeInput };
 export default MetaverseRoomPage;
-

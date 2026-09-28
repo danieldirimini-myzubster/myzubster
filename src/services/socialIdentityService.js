@@ -1,6 +1,8 @@
 const crypto = require('crypto');
 const User = require('../models/User');
-const MetaverseCharacter = require('../../backend/src/models/MetaverseCharacter');
+const mongoose = require('mongoose');
+const { createMetaverseCharacterModel } = require('../../backend/src/models/MetaverseCharacter');
+const MetaverseCharacter = createMetaverseCharacterModel(mongoose);
 const { notifyGoogleRegistration } = require('./adminNotificationEmailService');
 const { issueSession } = require('./authSessionService');
 

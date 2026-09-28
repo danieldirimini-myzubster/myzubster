@@ -8,7 +8,8 @@ jest.setTimeout(180000);
 
 const User = require('../src/models/User');
 const AuthSession = require('../src/models/AuthSession');
-const MetaverseCharacter = require('../backend/src/models/MetaverseCharacter');
+const { createMetaverseCharacterModel } = require('../backend/src/models/MetaverseCharacter');
+const MetaverseCharacter = createMetaverseCharacterModel(mongoose);
 const { upsertVerifiedAccount } = require('../src/services/socialIdentityService');
 const { rotateRefreshToken } = require('../src/services/authSessionService');
 
