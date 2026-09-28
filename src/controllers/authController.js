@@ -3,7 +3,7 @@ const MetaverseCharacter = require('../../backend/src/models/MetaverseCharacter'
 const jwt = require('jsonwebtoken');
 const {
   issueSession,
-  setSessionCookie
+  setSessionCookies
 } = require('../services/authSessionService');
 
 function isValidMoneroAddress(value) {
@@ -254,7 +254,7 @@ exports.register = async (req, res) => {
     const checks = [{ email }, { username }];
     if (github?.id) checks.push({ 'github.id': github.id });
     const existingUser = await User.findOne({ $or: checks });
-    if (existingUser) return res.status(400).json({ success: false, message: 'Username, email o account GitHub già in uso' });
+    if (existingUser) return res.status(400).json({ success: false, message: 'Username, email o account GitHub gi� in uso' });
 
     const user = new User({
       username,
@@ -283,7 +283,7 @@ exports.register = async (req, res) => {
     }
 
     const session = await issueSession(user, req);
-    setSessionCookie(res, session.token);
+    setSessionCookies(res, session);
 
     res.status(201).json({
       success: true,
@@ -337,7 +337,7 @@ exports.login = async (req, res) => {
     }
 
     const session = await issueSession(user, req);
-    setSessionCookie(res, session.token);
+    setSessionCookies(res, session);
 
     res.json({
       success: true,
@@ -385,3 +385,4 @@ exports.getProfile = async (req, res) => {
     res.status(500).json({ success: false, message: 'Errore durante il recupero del profilo', error: error.message });
   }
 };
+
