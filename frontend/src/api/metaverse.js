@@ -1,3 +1,5 @@
+import { authenticatedFetch } from './authenticatedFetch';
+
 // MyZubster World is served by the same public Express/Vercel app.
 // Keep this flow strictly same-origin so a stale or insecure build-time
 // REACT_APP_API_URL cannot redirect HTTPS visitors to a legacy HTTP backend.
@@ -9,7 +11,7 @@ function authHeaders() {
 }
 
 async function jsonRequest(path, options = {}) {
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await authenticatedFetch(`${API_URL}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -19,8 +21,12 @@ async function jsonRequest(path, options = {}) {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(payload.error || payload.message || `Metaverse request failed (${response.status})`);
+    const error = new Error(
+      payload.error?.message || payload.message || payload.error || `Metaverse request failed (${response.status})`
+    );
     error.status = response.status;
+    error.code = payload.error?.code || payload.code;
+    error.requestId = payload.request_id;
     throw error;
   }
   return payload;
@@ -290,3 +296,4 @@ export function leaveMetaverse(sessionId) {
     body: JSON.stringify({ sessionId })
   });
 }
+
