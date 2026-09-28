@@ -6,9 +6,12 @@ process.env.JWT_SECRET = 'auth-session-service-test-secret';
 const jwt = require('jsonwebtoken');
 const {
   SESSION_COOKIE,
+  REFRESH_COOKIE,
   issueSession,
   listUserSessions,
+  rotateRefreshToken,
   tokenFromRequest,
+  refreshTokenFromRequest,
   validateSession
 } = require('../src/services/authSessionService');
 
@@ -42,8 +45,82 @@ test('issueSession persists device metadata and signs a server-bound JWT', async
     sessionId: issued.sessionId,
     userAgent: 'MyZubster Test Browser',
     ipHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+    refreshTokenHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+    refreshTokenVersion: 0,
     expiresAt: expect.any(Date)
   }));
+  expect(issued.refreshToken).toMatch(new RegExp(`^myzr\\.${issued.sessionId}\\.`));
+  expect(create.mock.calls[0][0].refreshTokenHash).not.toContain(issued.refreshToken);
+});
+
+test('rotateRefreshToken replaces the current hash atomically and retains a bounded replay history', async () => {
+  const create = jest.fn().mockImplementation(async value => value);
+  const issued = await issueSession(
+    { _id: '507f1f77bcf86cd799439011', username: 'daniel', role: 'user' },
+    request(),
+    { SessionModel: { create } }
+  );
+  const stored = create.mock.calls[0][0];
+  const SessionModel = {
+    findOneAndUpdate: jest.fn().mockResolvedValue({
+      sessionId: issued.sessionId,
+      userId: '507f1f77bcf86cd799439011',
+      expiresAt: issued.expiresAt
+    })
+  };
+
+  const rotated = await rotateRefreshToken(issued.refreshToken, { SessionModel });
+
+  expect(rotated.refreshToken).not.toBe(issued.refreshToken);
+  expect(rotated.refreshToken).toMatch(new RegExp(`^myzr\\.${issued.sessionId}\\.`));
+  expect(SessionModel.findOneAndUpdate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      sessionId: issued.sessionId,
+      refreshTokenHash: stored.refreshTokenHash,
+      revokedAt: null
+    }),
+    expect.objectContaining({
+      $set: expect.objectContaining({ refreshTokenHash: expect.stringMatching(/^[a-f0-9]{64}$/) }),
+      $inc: { refreshTokenVersion: 1 },
+      $push: {
+        usedRefreshTokenHashes: {
+          $each: [stored.refreshTokenHash],
+          $slice: -50
+        }
+      }
+    }),
+    { new: true }
+  );
+});
+
+test('rotateRefreshToken revokes the session when a consumed refresh token is replayed', async () => {
+  const create = jest.fn().mockImplementation(async value => value);
+  const issued = await issueSession(
+    { _id: '507f1f77bcf86cd799439011', username: 'daniel', role: 'user' },
+    request(),
+    { SessionModel: { create } }
+  );
+  const SessionModel = {
+    findOneAndUpdate: jest.fn().mockResolvedValue(null),
+    findOne: jest.fn().mockReturnValue({
+      lean: jest.fn().mockResolvedValue({ sessionId: issued.sessionId })
+    }),
+    updateOne: jest.fn().mockResolvedValue({ modifiedCount: 1 })
+  };
+
+  await expect(rotateRefreshToken(issued.refreshToken, { SessionModel }))
+    .rejects.toMatchObject({ code: 'AUTH_REFRESH_REPLAY' });
+  expect(SessionModel.updateOne).toHaveBeenCalledWith(
+    { sessionId: issued.sessionId, revokedAt: null },
+    { $set: { revokedAt: expect.any(Date), revokedReason: 'refresh-token-replay' } }
+  );
+});
+
+test('rotateRefreshToken rejects malformed values without querying the database', async () => {
+  const SessionModel = { findOneAndUpdate: jest.fn() };
+  await expect(rotateRefreshToken('not-a-refresh-token', { SessionModel }))
+    .rejects.toMatchObject({ code: 'AUTH_REFRESH_INVALID' });
+  expect(SessionModel.findOneAndUpdate).not.toHaveBeenCalled();
 });
 
 test('validateSession accepts an active session and rejects an unknown or revoked one', async () => {
@@ -88,6 +165,10 @@ test('tokenFromRequest accepts Authorization first and the secure session cookie
   expect(tokenFromRequest(request({
     cookie: `theme=dark; ${SESSION_COOKIE}=cookie%20token`
   }))).toBe('cookie token');
+
+  expect(refreshTokenFromRequest(request({
+    cookie: `${SESSION_COOKIE}=access; ${REFRESH_COOKIE}=refresh%20token`
+  }))).toBe('refresh token');
 });
 
 test('listUserSessions marks only the current device', async () => {
@@ -113,3 +194,4 @@ test('listUserSessions marks only the current device', async () => {
       device: 'Laptop'
     })]);
 });
+
