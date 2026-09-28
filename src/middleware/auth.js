@@ -1,9 +1,13 @@
 const jwt = require('jsonwebtoken');
 const {
   requestId,
-  tokenFromRequest,
+  tokenCredentialFromRequest,
   validateSession
 } = require('../services/authSessionService');
+const {
+  isTrustedMutationRequest,
+  rejectCsrf
+} = require('./csrf');
 
 function authError(req, res, code, message) {
   return res.status(401).json({
@@ -15,7 +19,8 @@ function authError(req, res, code, message) {
 
 exports.authenticate = async (req, res, next) => {
   try {
-    const token = tokenFromRequest(req);
+    const credentials = tokenCredentialFromRequest(req);
+    const token = credentials.token;
     if (!token) {
       return authError(
         req,
@@ -23,6 +28,10 @@ exports.authenticate = async (req, res, next) => {
         'AUTH_TOKEN_MISSING',
         'Token di autenticazione mancante o non valido'
       );
+    }
+
+    if (credentials.source === 'cookie' && !isTrustedMutationRequest(req)) {
+      return rejectCsrf(req, res);
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -41,6 +50,7 @@ exports.authenticate = async (req, res, next) => {
     req.username = decoded.username;
     req.authSessionId = decoded.sid || null;
     req.authSession = session;
+    req.authTokenSource = credentials.source;
 
     return next();
   } catch (error) {
@@ -60,7 +70,7 @@ exports.authenticate = async (req, res, next) => {
 // Anonymous requests remain guests. If a caller supplies a token, validate it
 // exactly like a protected route so an invalid token never downgrades silently.
 exports.optionalAuthenticate = async (req, res, next) => {
-  if (!tokenFromRequest(req)) return next();
+  if (!tokenCredentialFromRequest(req).token) return next();
   return exports.authenticate(req, res, next);
 };
 
@@ -74,4 +84,5 @@ exports.isAdmin = (req, res, next) => {
   }
   next();
 };
+
 
