@@ -9,6 +9,7 @@ const culturalContributorController = require('../controllers/culturalContributo
 const zorgaxCulturalController = require('../controllers/zorgaxCulturalController');
 const User = require('../models/User');
 const { authenticate } = require('../middleware/auth');
+const { requireTrustedOrigin } = require('../middleware/csrf');
 const { decryptToken, updateBio, updateProfileReadme } = require('../services/githubProfileAutomation');
 
 function legacyOrSocialCallback(provider, legacyHandler) {
@@ -29,23 +30,23 @@ function validateRegistration(req, res, next) {
   return next();
 }
 
-router.post('/register', validateRegistration, authController.register);
-router.post('/login', authController.login);
+router.post('/register', requireTrustedOrigin, validateRegistration, authController.register);
+router.post('/login', requireTrustedOrigin, authController.login);
 router.get('/github/start', authController.githubStart);
 router.get('/github/callback', legacyOrSocialCallback('github', authController.githubCallback));
-router.post('/github/verify-ticket', authController.githubVerifyTicket);
+router.post('/github/verify-ticket', requireTrustedOrigin, authController.githubVerifyTicket);
 router.get('/social/providers', socialAuthController.providers);
 router.get('/social/:provider/start', socialAuthController.start);
 router.get('/social/:provider/callback', socialAuthController.callback);
-router.post('/social/exchange-ticket', socialAuthController.exchangeTicket);
-router.post('/refresh', authSessionController.refresh);
-router.post('/logout', authSessionController.logout);
+router.post('/social/exchange-ticket', requireTrustedOrigin, socialAuthController.exchangeTicket);
+router.post('/refresh', requireTrustedOrigin, authSessionController.refresh);
+router.post('/logout', requireTrustedOrigin, authSessionController.logout);
 router.get('/me', authenticate, authController.getProfile);
 router.get('/me/sessions', authenticate, authSessionController.getSessions);
 router.delete('/me/sessions/:sessionId', authenticate, authSessionController.revokeSession);
 router.get('/gmail/start', emailProfileController.gmailStart);
 router.get('/gmail/callback', legacyOrSocialCallback('google', emailProfileController.gmailCallback));
-router.post('/gmail/verify-ticket', emailProfileController.verifyDraft);
+router.post('/gmail/verify-ticket', requireTrustedOrigin, emailProfileController.verifyDraft);
 router.get('/gmail/auto-sync/cron', emailProfileController.runAutoSync);
 router.get('/profile', authenticate, authController.getProfile);
 router.get('/github/public-snapshot', authenticate, async (req, res) => {
