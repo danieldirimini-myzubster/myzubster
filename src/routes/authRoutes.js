@@ -38,6 +38,7 @@ router.get('/social/providers', socialAuthController.providers);
 router.get('/social/:provider/start', socialAuthController.start);
 router.get('/social/:provider/callback', socialAuthController.callback);
 router.post('/social/exchange-ticket', socialAuthController.exchangeTicket);
+router.post('/refresh', authSessionController.refresh);
 router.post('/logout', authSessionController.logout);
 router.get('/me', authenticate, authController.getProfile);
 router.get('/me/sessions', authenticate, authSessionController.getSessions);
@@ -189,7 +190,7 @@ router.put('/github/automation', authenticate, async (req, res) => {
   const enabled = req.body?.enabled === true;
   const user = await User.findById(req.userId);
   if (!user) return res.status(404).json({ success: false, message: 'Utente non trovato' });
-  if (enabled && !user.github?.login) return res.status(409).json({ success: false, message: 'Collega e verifica GitHub prima di attivare l’automazione' });
+  if (enabled && !user.github?.login) return res.status(409).json({ success: false, message: 'Collega e verifica GitHub prima di attivare l'automazione' });
   user.githubAutomation.enabled = enabled;
   user.githubAutomation.updatedAt = new Date();
   if (enabled && !user.githubAutomation.consentedAt) user.githubAutomation.consentedAt = new Date();
@@ -201,7 +202,7 @@ router.post('/github/automation/apply', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select('+githubAutomation.accessTokenEncrypted github githubAutomation');
     if (!user?.github?.login) return res.status(409).json({ success:false, message:'Collega GitHub prima di applicare modifiche' });
-    if (!user.githubAutomation?.enabled) return res.status(409).json({ success:false, message:'Attiva prima l’automazione GitHub' });
+    if (!user.githubAutomation?.enabled) return res.status(409).json({ success:false, message:'Attiva prima l'automazione GitHub' });
     if (!user.githubAutomation?.accessTokenEncrypted) return res.status(403).json({ success:false, message:'Autorizza prima le modifiche GitHub' });
     const bio = typeof req.body?.bio === 'string' ? req.body.bio.trim() : '';
     const readme = typeof req.body?.readme === 'string' ? req.body.readme.trim() : '';
@@ -231,3 +232,4 @@ router.post('/gmail/auto-sync/start-url', authenticate, emailProfileController.a
 router.get('/gmail/auto-sync/status', authenticate, emailProfileController.autoSyncStatus);
 router.delete('/gmail/auto-sync', authenticate, emailProfileController.disableAutoSync);
 module.exports = router;
+
