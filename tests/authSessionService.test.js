@@ -10,6 +10,7 @@ const {
   issueSession,
   listUserSessions,
   rotateRefreshToken,
+  tokenCredentialFromRequest,
   tokenFromRequest,
   refreshTokenFromRequest,
   validateSession
@@ -169,6 +170,14 @@ test('tokenFromRequest accepts Authorization first and the secure session cookie
   expect(refreshTokenFromRequest(request({
     cookie: `${SESSION_COOKIE}=access; ${REFRESH_COOKIE}=refresh%20token`
   }))).toBe('refresh token');
+
+  expect(tokenCredentialFromRequest(request({
+    authorization: 'Bearer bearer-token',
+    cookie: `${SESSION_COOKIE}=cookie-token`
+  }))).toEqual({ token: 'bearer-token', source: 'bearer' });
+  expect(tokenCredentialFromRequest(request({
+    cookie: `${SESSION_COOKIE}=cookie-token`
+  }))).toEqual({ token: 'cookie-token', source: 'cookie' });
 });
 
 test('listUserSessions marks only the current device', async () => {
