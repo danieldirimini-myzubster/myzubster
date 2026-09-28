@@ -2,6 +2,7 @@ import {
   clearBrowserAuth,
   getAuthSessions,
   logoutCurrentSession,
+  refreshAuthSession,
   revokeAuthSession
 } from './authSessions';
 
@@ -71,5 +72,22 @@ test('logout is a POST and local cleanup removes every legacy token', async () =
   expect(global.fetch).toHaveBeenCalledWith('/api/auth/logout', expect.objectContaining({ method: 'POST' }));
   expect(localStorage.length).toBe(0);
   expect(sessionStorage.getItem('token')).toBeNull();
+});
+
+test('refresh rotates the server cookie and replaces the migration access token', async () => {
+  global.fetch.mockResolvedValue({
+    ok: true,
+    json: async () => ({ success: true, data: { token: 'rotated-access-token' } })
+  });
+
+  await refreshAuthSession();
+
+  expect(global.fetch).toHaveBeenCalledWith('/api/auth/refresh', expect.objectContaining({
+    method: 'POST',
+    credentials: 'same-origin',
+    body: '{}',
+    headers: expect.objectContaining({ 'Content-Type': 'application/json' })
+  }));
+  expect(localStorage.getItem('myzubster-token')).toBe('rotated-access-token');
 });
 
