@@ -203,7 +203,7 @@ router.post('/github/automation/apply', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select('+githubAutomation.accessTokenEncrypted github githubAutomation');
     if (!user?.github?.login) return res.status(409).json({ success:false, message:'Collega GitHub prima di applicare modifiche' });
-    if (!user.githubAutomation?.enabled) return res.status(409).json({ success:false, message:'Attiva prima l'automazione GitHub' });
+    if (!user.githubAutomation?.enabled) return res.status(409).json({ success:false, message:"Attiva prima l'automazione GitHub" });
     if (!user.githubAutomation?.accessTokenEncrypted) return res.status(403).json({ success:false, message:'Autorizza prima le modifiche GitHub' });
     const bio = typeof req.body?.bio === 'string' ? req.body.bio.trim() : '';
     const readme = typeof req.body?.readme === 'string' ? req.body.readme.trim() : '';
