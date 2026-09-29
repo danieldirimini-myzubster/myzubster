@@ -191,7 +191,7 @@ router.put('/github/automation', authenticate, async (req, res) => {
   const enabled = req.body?.enabled === true;
   const user = await User.findById(req.userId);
   if (!user) return res.status(404).json({ success: false, message: 'Utente non trovato' });
-  if (enabled && !user.github?.login) return res.status(409).json({ success: false, message: 'Collega e verifica GitHub prima di attivare l'automazione' });
+  if (enabled && !user.github?.login) return res.status(409).json({ success: false, message: "Collega e verifica GitHub prima di attivare l'automazione" });
   user.githubAutomation.enabled = enabled;
   user.githubAutomation.updatedAt = new Date();
   if (enabled && !user.githubAutomation.consentedAt) user.githubAutomation.consentedAt = new Date();
