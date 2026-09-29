@@ -67,7 +67,6 @@ function refreshOnce() {
 }
 
 function notifyAuthenticationExpired(error) {
-  clearBrowserAuth();
   if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
   window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT, {
     detail: {
@@ -84,7 +83,7 @@ function notifyAuthenticationExpired(error) {
  * Concurrent failures share one refresh operation, preventing reuse of a
  * single-use refresh token. Revoked sessions are deliberately not refreshed.
  */
-export async function authenticatedFetch(input, options = {}) {
+export async function authenticatedFetch(input, options = {}, policy = {}) {
   const response = await fetch(input, requestOptions(options));
   if (response.status !== 401 || isAuthControlRequest(input)) return response;
 
@@ -95,7 +94,8 @@ export async function authenticatedFetch(input, options = {}) {
     await refreshOnce();
   } catch (error) {
     if (error?.status === 401) {
-      notifyAuthenticationExpired(error);
+      clearBrowserAuth();
+      if (policy.notifyOnFailure !== false) notifyAuthenticationExpired(error);
       return response;
     }
     throw error;
