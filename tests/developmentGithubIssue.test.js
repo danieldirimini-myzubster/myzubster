@@ -89,3 +89,17 @@ test('the materialization endpoint requires an authenticated admin', async () =>
     .send({ repository: 'org/repo' }).expect(201);
   expect(githubIssues.materialize).toHaveBeenCalledTimes(1);
 });
+
+test('private GitHub issue links are omitted from non-admin request reads', async () => {
+  const app = express(); app.use(express.json());
+  const requests = { findOne: async () => ({ requestId: 'dev-123', status: 'OPEN',
+    githubIssues: [{ repository: 'org/private', url: 'https://github.com/org/private/issues/42' }] }) };
+  app.use('/api/zorgax/development', createDevelopmentRequestRouter({ requests,
+    auth: (req, _res, next) => { req.userId = 'worker'; req.userRole = req.headers['x-role'] || 'user'; next(); }
+  }));
+  const url = '/api/zorgax/development/requests/dev-123';
+  const ordinary = await supertest(app).get(url).expect(200);
+  expect(ordinary.body.request.githubIssues).toBeUndefined();
+  const admin = await supertest(app).get(url).set('x-role', 'admin').expect(200);
+  expect(admin.body.request.githubIssues).toHaveLength(1);
+});
