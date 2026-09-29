@@ -18,7 +18,7 @@ export default function KnowledgeGraphPage(){
  const q=new URLSearchParams(window.location.search),domain=(q.get('domain')||'MONERO').toUpperCase(),id=(q.get('id')||'ART-001').toUpperCase(),cardId=q.get('card');
  const staticArticle=cardId?null:knowledgeArticles[`${domain}:${id}`];
  const [publicCards,setPublicCards]=useState([]),[loadError,setLoadError]=useState(''),[loading,setLoading]=useState(true);
- useEffect(()=>{let live=true;fetch('/api/knowledge-evidence/public',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Catalogo non disponibile');return r.json()}).then(d=>{if(live)setPublicCards(Array.isArray(d.cards)?d.cards:[])}).catch(e=>{if(live)setLoadError(e.message)}).finally(()=>{if(live)setLoading(false)});return()=>{live=false}},[]);
+ useEffect(()=>{let live=true;fetch('https://www.myzubster.com/api/knowledge-evidence/public',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Catalogo non disponibile');return r.json()}).then(d=>{if(live)setPublicCards(Array.isArray(d.cards)?d.cards:[])}).catch(e=>{if(live)setLoadError(e.message)}).finally(()=>{if(live)setLoading(false)});return()=>{live=false}},[]);
 
  const dynamic=useMemo(()=>publicCards.map((c,i)=>({
    ...c,
