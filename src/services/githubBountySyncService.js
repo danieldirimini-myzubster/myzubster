@@ -480,6 +480,7 @@ async function processWebhook(eventName, payload) {
 }
 
 module.exports = {
+  githubHeaders,
   labelNames,
   deriveLifecycle,
   canAutoTransition,
