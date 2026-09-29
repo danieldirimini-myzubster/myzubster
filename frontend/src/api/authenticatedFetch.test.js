@@ -117,3 +117,27 @@ test('clears migration credentials and emits an event after terminal refresh fai
   window.removeEventListener(AUTH_EXPIRED_EVENT, listener);
 });
 
+test('silently probes for a cookie session without redirecting a signed-out visitor', async () => {
+  localStorage.setItem('myzubster-token', 'stale-access');
+  const listener = jest.fn();
+  window.addEventListener(AUTH_EXPIRED_EVENT, listener);
+  global.fetch
+    .mockResolvedValueOnce(jsonResponse(401, {
+      error: { code: 'AUTH_TOKEN_MISSING' }
+    }))
+    .mockResolvedValueOnce(jsonResponse(401, {
+      error: { code: 'AUTH_REFRESH_MISSING' }
+    }));
+
+  const response = await authenticatedFetch(
+    '/api/auth/me',
+    { cache: 'no-store' },
+    { notifyOnFailure: false }
+  );
+
+  expect(response.status).toBe(401);
+  expect(localStorage.getItem('myzubster-token')).toBeNull();
+  expect(listener).not.toHaveBeenCalled();
+  window.removeEventListener(AUTH_EXPIRED_EVENT, listener);
+});
+
