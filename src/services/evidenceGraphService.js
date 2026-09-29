@@ -1,0 +1,358 @@
+const crypto = require('crypto');
+
+const GRAPH_SCHEMA = 'myzubster.evidence-graph.v1';
+
+const NODE_TYPES = Object.freeze([
+  'person',
+  'claim',
+  'knowledge-card',
+  'evidence',
+  'artifact',
+  'canonical-payload',
+  'digest',
+  'attestation',
+  'credential'
+]);
+
+const RELATIONS = Object.freeze([
+  'CLAIMS',
+  'DESCRIBED_BY',
+  'SUPPORTED_BY',
+  'PRODUCED',
+  'CANONICALIZED_AS',
+  'HASHED_AS',
+  'ATTESTED_BY',
+  'CREDENTIALED_BY'
+]);
+
+function stableObject(value) {
+  if (Array.isArray(value)) return value.map(stableObject);
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.keys(value).sort().reduce((out, key) => {
+    if (value[key] !== undefined) out[key] = stableObject(value[key]);
+    return out;
+  }, {});
+}
+
+function digest(value) {
+  return crypto
+    .createHash('sha256')
+    .update(JSON.stringify(stableObject(value)))
+    .digest('hex');
+}
+
+function clean(value) {
+  return String(value == null ? '' : value).trim();
+}
+
+function createNode(input = {}) {
+  const type = clean(input.type);
+  const label = clean(input.label);
+
+  if (!NODE_TYPES.includes(type)) {
+    throw new Error(`Unsupported evidence graph node type: ${type}`);
+  }
+
+  if (!label) throw new Error('Evidence graph node label is required');
+
+  const metadata = stableObject(input.metadata || {});
+  const id = clean(input.id) || `${type}:${digest({ type, label, metadata }).slice(0, 24)}`;
+
+  return stableObject({
+    id,
+    type,
+    label,
+    metadata
+  });
+}
+
+function createEdge(input = {}) {
+  const from = clean(input.from);
+  const to = clean(input.to);
+  const relation = clean(input.relation).toUpperCase();
+
+  if (!from || !to) throw new Error('Evidence graph edge requires from and to');
+  if (!RELATIONS.includes(relation)) {
+    throw new Error(`Unsupported evidence graph relation: ${relation}`);
+  }
+
+  return stableObject({
+    from,
+    to,
+    relation,
+    evidenceClass: clean(input.evidenceClass) || null,
+    verificationStatus: clean(input.verificationStatus) || null,
+    metadata: stableObject(input.metadata || {})
+  });
+}
+
+function buildEvidenceGraph(input = {}) {
+  const nodes = (Array.isArray(input.nodes) ? input.nodes : []).map(createNode);
+  const edges = (Array.isArray(input.edges) ? input.edges : []).map(createEdge);
+
+  const ids = new Set();
+  for (const node of nodes) {
+    if (ids.has(node.id)) throw new Error(`Duplicate evidence graph node id: ${node.id}`);
+    ids.add(node.id);
+  }
+
+  for (const edge of edges) {
+    if (!ids.has(edge.from)) {
+      throw new Error(`Evidence graph edge references missing from node: ${edge.from}`);
+    }
+    if (!ids.has(edge.to)) {
+      throw new Error(`Evidence graph edge references missing to node: ${edge.to}`);
+    }
+  }
+
+  const graph = stableObject({
+    schema: GRAPH_SCHEMA,
+    subject: clean(input.subject) || null,
+    nodes,
+    edges
+  });
+
+  return {
+    graph,
+    graphHash: digest(graph),
+    algorithm: 'sha256'
+  };
+}
+
+module.exports = {
+  GRAPH_SCHEMA,
+  NODE_TYPES,
+  RELATIONS,
+  stableObject,
+  createNode,
+  createEdge,
+  buildEvidenceGraph
+};
+
+function projectKnowledgeEvidence(record = {}) {
+  const payload = record.payload || {};
+  const subject = clean(payload.subject);
+
+  if (payload.schema !== 'myzubster.knowledge.evidence.v1') {
+    throw new Error('Unsupported knowledge evidence schema');
+  }
+
+  if (!subject || !clean(payload.claim)) {
+    throw new Error('Knowledge evidence subject and claim are required');
+  }
+
+  const personId = `person:${subject}`;
+  const claimId = `claim:${digest({
+    subject,
+    domain: payload.domain,
+    claim: payload.claim
+  }).slice(0, 24)}`;
+
+  const evidenceId = `evidence:${clean(record.evidenceHash) || digest(payload)}`;
+
+  const nodes = [
+    {
+      id: personId,
+      type: 'person',
+      label: subject
+    },
+    {
+      id: claimId,
+      type: 'claim',
+      label: clean(payload.claim),
+      metadata: {
+        domain: clean(payload.domain),
+        evidenceLevel: clean(payload.evidenceLevel) || 'self-declared'
+      }
+    },
+    {
+      id: evidenceId,
+      type: 'evidence',
+      label: clean(record.commitment) || 'Knowledge evidence',
+      metadata: {
+        schema: payload.schema,
+        algorithm: clean(record.algorithm) || 'sha256',
+        evidenceHash: clean(record.evidenceHash),
+        commitment: clean(record.commitment)
+      }
+    }
+  ];
+
+  const edges = [
+    {
+      from: personId,
+      to: claimId,
+      relation: 'CLAIMS',
+      evidenceClass: clean(payload.evidenceLevel) || 'self-declared',
+      verificationStatus: 'declared'
+    },
+    {
+      from: claimId,
+      to: evidenceId,
+      relation: 'SUPPORTED_BY',
+      evidenceClass: clean(payload.evidenceLevel) || 'self-declared',
+      verificationStatus: clean(record.evidenceHash) ? 'integrity-hashed' : 'unverified'
+    }
+  ];
+
+  for (const ref of Array.isArray(payload.evidenceRefs) ? payload.evidenceRefs : []) {
+    const reference = clean(ref.reference);
+    if (!reference) continue;
+
+    const artifactId = `artifact:${digest({
+      type: clean(ref.type) || 'reference',
+      reference
+    }).slice(0, 24)}`;
+
+    nodes.push({
+      id: artifactId,
+      type: 'artifact',
+      label: reference,
+      metadata: {
+        type: clean(ref.type) || 'reference',
+        reference
+      }
+    });
+
+    edges.push({
+      from: evidenceId,
+      to: artifactId,
+      relation: 'SUPPORTED_BY',
+      evidenceClass: 'artifact',
+      verificationStatus: 'referenced'
+    });
+  }
+
+  return buildEvidenceGraph({
+    subject,
+    nodes,
+    edges
+  });
+}
+
+module.exports.projectKnowledgeEvidence = projectKnowledgeEvidence;
+
+function appendIntegrityChain(graphInput = {}, record = {}) {
+  const graph = graphInput.graph || graphInput;
+  const nodes = Array.isArray(graph.nodes) ? [...graph.nodes] : [];
+  const edges = Array.isArray(graph.edges) ? [...graph.edges] : [];
+
+  const payload = record.payload;
+  const evidenceHash = clean(record.evidenceHash).toLowerCase();
+  const algorithm = clean(record.algorithm).toLowerCase() || 'sha256';
+
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Integrity chain requires an evidence payload');
+  }
+
+  if (!/^[a-f0-9]{64}$/.test(evidenceHash)) {
+    throw new Error('Integrity chain requires a 32-byte evidence hash');
+  }
+
+  const computedHash = digest(payload);
+  if (computedHash !== evidenceHash) {
+    throw new Error('Integrity chain evidence hash does not match canonical payload');
+  }
+
+  const evidenceNode = nodes.find(node =>
+    node.type === 'evidence' &&
+    clean(node.metadata && node.metadata.evidenceHash).toLowerCase() === evidenceHash
+  );
+
+  if (!evidenceNode) {
+    throw new Error('Integrity chain could not find matching evidence node');
+  }
+
+  const canonicalPayload = stableObject(payload);
+  const payloadId = `canonical-payload:${digest(canonicalPayload).slice(0, 24)}`;
+  const digestId = `digest:${algorithm}:${evidenceHash}`;
+
+  nodes.push(createNode({
+    id: payloadId,
+    type: 'canonical-payload',
+    label: `${clean(payload.schema) || 'evidence'} canonical payload`,
+    metadata: {
+      schema: clean(payload.schema),
+      canonicalization: 'recursive-key-sort-v1',
+      serialization: 'json'
+    }
+  }));
+
+  nodes.push(createNode({
+    id: digestId,
+    type: 'digest',
+    label: `${algorithm.toUpperCase()} ${evidenceHash}`,
+    metadata: {
+      algorithm,
+      value: evidenceHash,
+      commitment: clean(record.commitment)
+    }
+  }));
+
+  edges.push(createEdge({
+    from: evidenceNode.id,
+    to: payloadId,
+    relation: 'CANONICALIZED_AS',
+    evidenceClass: 'integrity',
+    verificationStatus: 'reproducible'
+  }));
+
+  edges.push(createEdge({
+    from: payloadId,
+    to: digestId,
+    relation: 'HASHED_AS',
+    evidenceClass: 'cryptographic',
+    verificationStatus: 'reproducible'
+  }));
+
+  const anchor = record.anchor || {};
+  const anchorStatus = clean(anchor.status).toUpperCase();
+
+  if (anchorStatus === 'CONFIRMED') {
+    const txId = clean(anchor.txId);
+    const network = clean(anchor.network);
+
+    if (!txId || !network) {
+      throw new Error('Confirmed anchor requires txId and network');
+    }
+
+    const attestationId = `attestation:${digest({
+      network,
+      txId
+    }).slice(0, 24)}`;
+
+    nodes.push(createNode({
+      id: attestationId,
+      type: 'attestation',
+      label: `${network} ${txId}`,
+      metadata: {
+        provider: 'blockchain-anchor',
+        network,
+        chainId: anchor.chainId == null ? null : String(anchor.chainId),
+        txId,
+        blockNumber: anchor.blockNumber == null ? null : String(anchor.blockNumber),
+        anchoredAt: anchor.anchoredAt ? new Date(anchor.anchoredAt).toISOString() : null,
+        confirmedAt: anchor.confirmedAt ? new Date(anchor.confirmedAt).toISOString() : null,
+        explorerUrl: clean(anchor.explorerUrl) || null,
+        status: anchorStatus
+      }
+    }));
+
+    edges.push(createEdge({
+      from: digestId,
+      to: attestationId,
+      relation: 'ATTESTED_BY',
+      evidenceClass: 'blockchain-anchor',
+      verificationStatus: 'confirmed'
+    }));
+  }
+
+  return buildEvidenceGraph({
+    subject: graph.subject,
+    nodes,
+    edges
+  });
+}
+
+module.exports.appendIntegrityChain = appendIntegrityChain;
