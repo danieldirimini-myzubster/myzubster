@@ -4,9 +4,10 @@ const { authenticate, isAdmin } = require('../middleware/auth');
 const RequestModel = require('../models/DevelopmentRequest');
 const KnowledgeModel = require('../models/knowledgeContributionModel');
 const service = require('../services/developmentRequestService');
+const githubIssueService = require('../services/developmentGithubIssueService');
 
 function createDevelopmentRequestRouter({ auth = authenticate, admin = isAdmin, requests = RequestModel,
-  knowledge = KnowledgeModel, operations = service } = {}) {
+  knowledge = KnowledgeModel, operations = service, githubIssues = githubIssueService } = {}) {
   const router = express.Router();
   router.use(auth);
   const handle = fn => async (req, res) => {
@@ -37,6 +38,11 @@ function createDevelopmentRequestRouter({ auth = authenticate, admin = isAdmin, 
     const request = await operations.transition({ RequestModel: requests, requestId: req.params.requestId,
       from: 'OPEN', to: 'IN_PROGRESS', changes: { claimantId: String(req.userId), claimedAt: new Date() } });
     res.json({ success: true, request });
+  }));
+  router.post('/requests/:requestId/github-issues', admin, handle(async (req, res) => {
+    const result = await githubIssues.materialize({ RequestModel: requests,
+      requestId: req.params.requestId, repository: req.body?.repository });
+    res.status(result.replay ? 200 : 201).json({ success: true, ...result });
   }));
   router.post('/requests/:requestId/submit', handle(async (req, res) => {
     const evidence = operations.requiredText(req.body?.evidence, 'evidence', 4000);
