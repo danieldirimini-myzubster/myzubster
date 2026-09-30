@@ -41,7 +41,10 @@ export default function KnowledgeGraphPage(){
  const nodes=useMemo(()=>{
    if(isDynamic){
      const samePublisher=dynamic.filter(c=>c.publisher===requestedDynamic.publisher&&c.key!==requestedDynamic.key);
-     const sources=buildEvidenceNodes(requestedDynamic.key,requestedDynamic.evidence||[]);\n     const proofUrls=new Set(sources.filter(s=>s.type==='proof').map(s=>s.canonicalUrl));
+     const evidence=requestedDynamic.evidence||[];
+     const sources=buildEvidenceNodes(requestedDynamic.key,evidence);
+     const versionedProofs=buildVersionedProofNodes(requestedDynamic.key,evidence);
+     const groupedProofUrls=new Set(versionedProofs.flatMap(proof=>proof.canonicalUrls||[]));
      return [
        {key:'card',id:articleId,type:'article',title:requestedDynamic.title,description:requestedDynamic.description,url:`https://www.myzubster.com/knowledge-card?id=${encodeURIComponent(requestedDynamic.key)}`},
        {key:'person',id:isProofV2?'N4K48':slug(requestedDynamic.publisher),type:'person',title:requestedDynamic.publisher,description:'Profilo che ha pubblicato questa conoscenza',url:isProofV2?'https://github.com/nicolaususnicola-lgtm':undefined},
@@ -52,7 +55,8 @@ export default function KnowledgeGraphPage(){
          {key:'docs',id:'DOCS',type:'source',title:'Metodo di verifica',description:'Commit GitHub con documentazione e comandi per ricalcolare il digest.',url:proofLinks.documentation}
        ]:[]),
        ...samePublisher.map(c=>({key:`a:${c.id}`,id:c.id,type:'article',title:c.title,description:c.description,domain:c.domain,cardId:c.key})),
-       ...versionedProofs,\n       ...sources.filter(s=>!groupedProofUrls.has(s.canonicalUrl)),
+       ...versionedProofs,
+       ...sources.filter(s=>!groupedProofUrls.has(s.canonicalUrl)),
        {key:`c:${slug(requestedDynamic.domain)}`,id:slug(requestedDynamic.domain),type:'concept',title:requestedDynamic.domain,description:'Ambito della conoscenza'}
      ];
    }
