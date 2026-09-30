@@ -3,6 +3,17 @@ const fs = require('fs');
 const path = require('path');
 const { selectModel, estimateAstraCost } = require('./aiModelRouter');
 const { getAstraMonthlySpend, recordAstraUsage, reserveAstraBudget, settleAstraBudget, releaseAstraBudget } = require('./zorgaxAIUsageService');
+const {
+  DATA_CLASSES,
+  PROCESSING_MODES,
+  EGRESS,
+  classifyData,
+  evaluateEgress,
+  minimizeForExternalProcessing,
+  createAuditEvent
+} = require('./zorgaxPrivacyPolicyService');
+const { askLocalOllama } = require('./zorgaxLocalAIService');
+const { appendPrivacyAudit } = require('./zorgaxPrivacyAuditService');
 
 const DEFAULT_GATEWAY = 'https://myzubster-gateway.vercel.app';
 const MAX_SOURCES = 8;
@@ -123,5 +134,305 @@ async function askGeneralAI(message,sources=[],history=[],webRequested=false){
   const response=await fetch(`${gateway}/api/zargox/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:prompt,useWeb:false,history:Array.isArray(history)?history.slice(-12):[]})});
   const json=await response.json().catch(()=>({}));if(!response.ok)throw new Error(`AI gateway HTTP ${response.status}`);return json.response||json.message||json.answer||'';
 }
-async function answer({message,useWeb=true,history=[],limit=5}){const text=cleanText(message);if(!text)throw new Error('Messaggio mancante');if(dataIntent(text)){const dataPreview=previewData(text.replace(/^.*?\b(?:salva|inserisci|registra|memorizza|immetti)\b\s*/i,''));return{response:`Ho preparato l'anteprima dei dati. Non ho salvato nulla. Per renderli persistenti devi confermare esplicitamente con: ${dataPreview.confirmation}`,data_preview:dataPreview,action_required:'human_confirmation',sources:[]};}const research=useWeb?await searchWeb(text,limit):{query:text,sources:[],errors:[],live_search_available:false,providers_used:[]};const astraSpentUsd=await getAstraMonthlySpend().catch(()=>0);const route=selectModel({message:text,useResearch:useWeb,astraSpentUsd});let response;if(route.provider==='openai'){const worstCaseInputTokens=Buffer.byteLength(cleanText(buildAssistantPrompt(text,research.sources),OPENAI_MAX_INPUT_CHARS),'utf8');const worstCaseUsd=estimateAstraCost({inputTokens:worstCaseInputTokens,outputTokens:OPENAI_MAX_OUTPUT_TOKENS,model:route.model});const configuredReserve=Math.max(0,Number(process.env.ZORGAX_ASTRA_REQUEST_RESERVE_USD)||1);const reservationUsd=Math.max(configuredReserve,worstCaseUsd);const reservation=reservationUsd<=route.remainingBudgetUsd?await reserveAstraBudget({amountUsd:reservationUsd,budgetUsd:route.budgetUsd}):null;if(!reservation){route.fallbackReason='budget_reservation_failed';route.provider='ollama';route.model=process.env.OLLAMA_MODEL||'qwen2.5:3b';response=await askGeneralAI(text,research.sources,history,useWeb);}else{try{const openaiResult=await askOpenAI(text,research.sources,history,reservationUsd);response=openaiResult.text;route.model=openaiResult.model;}catch(error){await releaseAstraBudget({reservedUsd:reservationUsd}).catch(()=>{});console.error('[zorgax-openai-fallback]',JSON.stringify({status:error.status||null,code:error.code||null,type:error.type||null,requestId:error.requestId||null,fallbackReason:error.fallbackReason||'openai_error'}));response=await askGeneralAI(text,research.sources,history,useWeb);route.fallbackReason=error.fallbackReason||'openai_error';route.provider='ollama';route.model=process.env.OLLAMA_MODEL||'qwen2.5:3b';}}}else{response=await askGeneralAI(text,research.sources,history,useWeb);}return{response,ai_provider:route.provider,ai_model:route.model,ai_budget_remaining_usd:route.remainingBudgetUsd,ai_fallback_reason:route.fallbackReason||null,sources:research.sources,search_errors:research.errors,web_research_requested:Boolean(useWeb),web_research_available:Boolean(research.live_search_available),web_providers_used:research.providers_used,specialist_mode:kefirIntent(text)?'kefir-circular-food':null,action_required:null};}
+async function answer({
+  message,
+  useWeb = true,
+  history = [],
+  limit = 5,
+  privacyClassification,
+  externalProcessingAllowed = false
+}) {
+  const text = cleanText(message);
+  if (!text) throw new Error('Messaggio mancante');
+
+  if (dataIntent(text)) {
+    const dataPreview = previewData(
+      text.replace(/^.*?\b(?:salva|inserisci|registra|memorizza|immetti)\b\s*/i, '')
+    );
+
+    return {
+      response: `Ho preparato l'anteprima dei dati. Non ho salvato nulla. Per renderli persistenti devi confermare esplicitamente con: ${dataPreview.confirmation}`,
+      data_preview: dataPreview,
+      action_required: 'human_confirmation',
+      sources: []
+    };
+  }
+
+  /*
+   * Privacy is evaluated before web research or AI-provider routing.
+   * History is part of the same trust decision because it can also
+   * contain sensitive information.
+   */
+  const privacyContent = [
+    text,
+    ...(Array.isArray(history)
+      ? history.slice(-12).map(item => String(item?.content || item?.message || ''))
+      : [])
+  ].join('\n');
+
+  const classification = classifyData({
+    content: privacyContent,
+    declaredClassification: privacyClassification
+  });
+
+  if (classification.classification !== DATA_CLASSES.PUBLIC) {
+    const localDecision = evaluateEgress({
+      content: privacyContent,
+      declaredClassification: classification.classification,
+      destination: EGRESS.LOCAL_OLLAMA
+    });
+
+    const audit = createAuditEvent({
+      decision: localDecision,
+      content: privacyContent
+    });
+
+    /*
+     * Persist only minimized decision metadata. Audit failure must never
+     * cause fallback from LOCAL_ONLY to an external provider.
+     */
+    try {
+      appendPrivacyAudit(audit);
+    } catch (error) {
+      console.error(
+        '[zorgax-privacy-audit-error]',
+        JSON.stringify({
+          code: error.code || null,
+          message: String(error.message || 'privacy audit write failed')
+        })
+      );
+    }
+
+    if (!localDecision.allowed) {
+      const error = new Error('Privacy policy denied AI processing');
+      error.code = 'ZORGAX_PRIVACY_DENIED';
+      throw error;
+    }
+
+    const localResult = await askLocalOllama({
+      message: buildAssistantPrompt(text, []),
+      history
+    });
+
+    return {
+      response: localResult.text,
+      ai_provider: localResult.provider,
+      ai_model: localResult.model,
+      ai_budget_remaining_usd: null,
+      ai_fallback_reason: 'privacy_local_only',
+      sources: [],
+      search_errors: [],
+      web_research_requested: Boolean(useWeb),
+      web_research_available: false,
+      web_providers_used: [],
+      specialist_mode: kefirIntent(text) ? 'kefir-circular-food' : null,
+      action_required: null,
+      privacy: {
+        classification: classification.classification,
+        processing_mode: PROCESSING_MODES.LOCAL_ONLY,
+        external_egress_allowed: false,
+        web_research_performed: false,
+        audit: {
+          schema: audit.schema,
+          content_digest: audit.contentDigest,
+          content_length: audit.contentLength,
+          destination: audit.destination,
+          allowed: audit.allowed,
+          reason: audit.reason,
+          sensitive_types: audit.sensitiveTypes
+        }
+      }
+    };
+  }
+
+  /*
+   * privacyContent remains the original message + history used for the
+   * trust decision. External copies are minimized only after PUBLIC
+   * classification has passed.
+   */
+  const externalPayload = minimizeForExternalProcessing(text, {
+    maxChars: OPENAI_MAX_INPUT_CHARS
+  });
+
+  const externalHistory = Array.isArray(history)
+    ? history.slice(-12).map(item => {
+        const minimized = minimizeForExternalProcessing(
+          String(item?.content || item?.message || ''),
+          { maxChars: 4000 }
+        );
+
+        return {
+          ...item,
+          content: minimized.text,
+          message: minimized.text
+        };
+      })
+    : [];
+
+  const researchDecision = evaluateEgress({
+    content: privacyContent,
+    declaredClassification: DATA_CLASSES.PUBLIC,
+    destination: EGRESS.WEB_SEARCH,
+    externalProcessingAllowed
+  });
+
+  const research = useWeb && researchDecision.allowed
+    ? await searchWeb(externalPayload.text, limit)
+    : {
+        query: text,
+        sources: [],
+        errors: [],
+        live_search_available: false,
+        providers_used: []
+      };
+
+  const astraSpentUsd = await getAstraMonthlySpend().catch(() => 0);
+  const route = selectModel({
+    message: text,
+    useResearch: useWeb,
+    astraSpentUsd
+  });
+
+  let response;
+
+  if (route.provider === 'openai') {
+    const openaiDecision = evaluateEgress({
+      content: privacyContent,
+      declaredClassification: DATA_CLASSES.PUBLIC,
+      destination: EGRESS.OPENAI,
+      externalProcessingAllowed
+    });
+
+    if (!openaiDecision.allowed) {
+      const error = new Error('Privacy policy denied OpenAI egress');
+      error.code = 'ZORGAX_PRIVACY_DENIED';
+      throw error;
+    }
+
+    const worstCaseInputTokens = Buffer.byteLength(
+      cleanText(buildAssistantPrompt(externalPayload.text, research.sources), OPENAI_MAX_INPUT_CHARS),
+      'utf8'
+    );
+
+    const worstCaseUsd = estimateAstraCost({
+      inputTokens: worstCaseInputTokens,
+      outputTokens: OPENAI_MAX_OUTPUT_TOKENS,
+      model: route.model
+    });
+
+    const configuredReserve = Math.max(
+      0,
+      Number(process.env.ZORGAX_ASTRA_REQUEST_RESERVE_USD) || 1
+    );
+
+    const reservationUsd = Math.max(configuredReserve, worstCaseUsd);
+
+    const reservation = reservationUsd <= route.remainingBudgetUsd
+      ? await reserveAstraBudget({
+          amountUsd: reservationUsd,
+          budgetUsd: route.budgetUsd
+        })
+      : null;
+
+    if (!reservation) {
+      route.fallbackReason = 'budget_reservation_failed';
+
+      const gatewayDecision = evaluateEgress({
+        content: privacyContent,
+        declaredClassification: DATA_CLASSES.PUBLIC,
+        destination: EGRESS.PUBLIC_AI_GATEWAY,
+        externalProcessingAllowed
+      });
+
+      if (!gatewayDecision.allowed) {
+        throw new Error('Privacy policy denied public AI gateway egress');
+      }
+
+      route.provider = 'public-ai-gateway';
+      route.model = 'gateway-managed';
+      response = await askGeneralAI(externalPayload.text, research.sources, externalHistory, useWeb);
+    } else {
+      try {
+        const openaiResult = await askOpenAI(
+          externalPayload.text,
+          research.sources,
+          externalHistory,
+          reservationUsd
+        );
+
+        response = openaiResult.text;
+        route.model = openaiResult.model;
+      } catch (error) {
+        await releaseAstraBudget({
+          reservedUsd: reservationUsd
+        }).catch(() => {});
+
+        console.error(
+          '[zorgax-openai-fallback]',
+          JSON.stringify({
+            status: error.status || null,
+            code: error.code || null,
+            type: error.type || null,
+            requestId: error.requestId || null,
+            fallbackReason: error.fallbackReason || 'openai_error'
+          })
+        );
+
+        const gatewayDecision = evaluateEgress({
+          content: privacyContent,
+          declaredClassification: DATA_CLASSES.PUBLIC,
+          destination: EGRESS.PUBLIC_AI_GATEWAY,
+          externalProcessingAllowed
+        });
+
+        if (!gatewayDecision.allowed) {
+          throw new Error('Privacy policy denied public AI gateway egress');
+        }
+
+        response = await askGeneralAI(externalPayload.text, research.sources, externalHistory, useWeb);
+        route.fallbackReason = error.fallbackReason || 'openai_error';
+        route.provider = 'public-ai-gateway';
+        route.model = 'gateway-managed';
+      }
+    }
+  } else {
+    const gatewayDecision = evaluateEgress({
+      content: privacyContent,
+      declaredClassification: DATA_CLASSES.PUBLIC,
+      destination: EGRESS.PUBLIC_AI_GATEWAY,
+      externalProcessingAllowed
+    });
+
+    if (!gatewayDecision.allowed) {
+      throw new Error('Privacy policy denied public AI gateway egress');
+    }
+
+    route.provider = 'public-ai-gateway';
+    route.model = 'gateway-managed';
+    response = await askGeneralAI(externalPayload.text, research.sources, externalHistory, useWeb);
+  }
+
+  return {
+    response,
+    ai_provider: route.provider,
+    ai_model: route.model,
+    ai_budget_remaining_usd: route.remainingBudgetUsd,
+    ai_fallback_reason: route.fallbackReason || null,
+    sources: research.sources,
+    search_errors: research.errors,
+    web_research_requested: Boolean(useWeb),
+    web_research_available: Boolean(research.live_search_available),
+    web_providers_used: research.providers_used,
+    specialist_mode: kefirIntent(text) ? 'kefir-circular-food' : null,
+    action_required: null,
+    privacy: {
+      classification: DATA_CLASSES.PUBLIC,
+      processing_mode: PROCESSING_MODES.EXTERNAL_ALLOWED,
+      external_egress_allowed: true,
+      web_research_performed: Boolean(
+        useWeb && researchDecision.allowed
+      )
+    }
+  };
+}
 module.exports={answer,searchWeb,previewData,digestPreview,dataIntent,kefirIntent,inferCategory,looksTimeSensitive,googleNewsSearch,openAIFallbackReason,buildRuntimeProductContext,buildAssistantPrompt};
