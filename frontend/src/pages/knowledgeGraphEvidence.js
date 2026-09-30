@@ -64,7 +64,8 @@ export const buildEvidenceNodes=(cardId,evidence=[])=>{
       digest:field(item,'digest','sha256','hash')||undefined,
       contract:field(item,'contract','contractAddress','contract_url')||undefined,
       transaction:field(item,'transaction','transactionHash','tx','txHash')||undefined,
-      documentation:field(item,'documentation','documentationUrl','docs')||undefined,\n      proofRole:proofRole(item)||undefined
+      documentation:field(item,'documentation','documentationUrl','docs')||undefined,
+      proofRole:proofRole(item)||undefined
     });
     return nodes;
   },[]);
