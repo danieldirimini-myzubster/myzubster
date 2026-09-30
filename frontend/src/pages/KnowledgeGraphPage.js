@@ -3,12 +3,19 @@ import {knowledgeArticles} from '../data/knowledge';
 import './KnowledgeGraphPage.css';
 import {technicalReviews} from '../data/technicalReviews';
 import TechnicalReviewGraph from './TechnicalReviewGraph';
-import {buildEvidenceNodes} from './knowledgeGraphEvidence';
+import {buildEvidenceNodes,buildVersionedProofNodes} from './knowledgeGraphEvidence';
 
 const color={article:'#ff4d8d',source:'#21d4b4',concept:'#8d7cff',person:'#f59e0b',proof:'#55a9ff'};
 const slug=v=>String(v||'').trim().toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,28)||'KNOWLEDGE';
 const proofCardId='6abaaefb3a7460c4574a45fd';
 const digest='6097e05866bafceec24663d2638cb1dae5742ac78284abbfd45cc9c3b0bfb845';
+const proofV3={
+ digest:'d1c89d2a4157a159b56e92825ca59fdb1f0e84e003b05e022af67da69ed25ac4',
+ payload:'https://github.com/nicolaususnicola-lgtm/myzubster-mvp/commit/e57261a325625057350aa059ca142f1eb84b30c2',
+ contract:'https://sepolia.etherscan.io/address/0x3233fA7f8c50Aa25d9B1263c25F28535B6eA59bF',
+ transaction:'https://sepolia.etherscan.io/tx/0x5c7717be6dc70e6416f8053c72bb1e2bec2b7c5462b23fcb9c4b1077f907fed4',
+ documentation:'https://github.com/nicolaususnicola-lgtm/myzubster-mvp/commit/148347838cf7bd1c1b83853311fd7a543f5e50e1'
+};
 const proofLinks={
  card:`https://www.myzubster.com/knowledge-card?id=${proofCardId}`,
  payload:'https://github.com/nicolaususnicola-lgtm/myzubster-mvp/commit/ecefd81c5c9da0be15c99aeeb83878480abd60a8',
@@ -41,18 +48,23 @@ export default function KnowledgeGraphPage(){
  const nodes=useMemo(()=>{
    if(isDynamic){
      const samePublisher=dynamic.filter(c=>c.publisher===requestedDynamic.publisher&&c.key!==requestedDynamic.key);
-     const sources=buildEvidenceNodes(requestedDynamic.key,requestedDynamic.evidence||[]);
+     const evidence=requestedDynamic.evidence||[];
+     const sources=buildEvidenceNodes(requestedDynamic.key,evidence);
+     const versionedProofs=buildVersionedProofNodes(requestedDynamic.key,evidence).filter(proof=>!(isProofV2&&proof.proofVersion==='2'));
+     const groupedProofUrls=new Set(versionedProofs.flatMap(proof=>proof.canonicalUrls||[]));
      return [
        {key:'card',id:articleId,type:'article',title:requestedDynamic.title,description:requestedDynamic.description,url:`https://www.myzubster.com/knowledge-card?id=${encodeURIComponent(requestedDynamic.key)}`},
        {key:'person',id:isProofV2?'N4K48':slug(requestedDynamic.publisher),type:'person',title:requestedDynamic.publisher,description:'Profilo che ha pubblicato questa conoscenza',url:isProofV2?'https://github.com/nicolaususnicola-lgtm':undefined},
        ...(isProofV2?[
+         {key:'proof-v3',id:'PROOF V3',type:'proof',title:'MyZubsterProof v3 · Sepolia',description:`SHA-256: ${proofV3.digest}. Attestazione v3 distinta dalla storia di Proof v2.`,url:proofV3.contract,extraUrl:proofV3.transaction,proofVersion:'3',digest:proofV3.digest,contract:proofV3.contract,transaction:proofV3.transaction,documentation:proofV3.documentation},
          {key:'payload',id:'PAYLOAD V1',type:'source',title:'Contenuto canonico',description:'Commit con gli esatti byte del payload canonico della Knowledge Card.',url:proofLinks.payload},
          {key:'digest',id:'SHA-256',type:'proof',title:'Digest del payload',description:`SHA-256: ${digest}. Il digest si riferisce al payload canonico nel commit, non alla pagina web che può cambiare.`},
          {key:'sepolia',id:'PROOF V2',type:'proof',title:'MyZubsterProof · Sepolia',description:'Contratto della seconda prova con knowledgeHash() riferito al digest del payload. Rete di test Ethereum Sepolia.',url:proofLinks.contract,extraUrl:proofLinks.transaction},
          {key:'docs',id:'DOCS',type:'source',title:'Metodo di verifica',description:'Commit GitHub con documentazione e comandi per ricalcolare il digest.',url:proofLinks.documentation}
        ]:[]),
        ...samePublisher.map(c=>({key:`a:${c.id}`,id:c.id,type:'article',title:c.title,description:c.description,domain:c.domain,cardId:c.key})),
-       ...sources,
+       ...versionedProofs,
+       ...sources.filter(s=>s.type!=='proof'&&!groupedProofUrls.has(s.canonicalUrl)),
        {key:`c:${slug(requestedDynamic.domain)}`,id:slug(requestedDynamic.domain),type:'concept',title:requestedDynamic.domain,description:'Ambito della conoscenza'}
      ];
    }
@@ -67,6 +79,6 @@ export default function KnowledgeGraphPage(){
  const shown=nodes.filter(n=>filter==='all'||n.type===filter||n.key===selected),active=nodes.find(n=>n.key===selected)||nodes[0],cx=390,cy=235;
  const pos=new Map(shown.map((n,i)=>n.key==='card'?[n.key,{x:cx,y:cy}]:[n.key,{x:cx+Math.cos((Math.PI*2*(i-1))/Math.max(shown.length-1,1)-Math.PI/2)*225,y:cy+Math.sin((Math.PI*2*(i-1))/Math.max(shown.length-1,1)-Math.PI/2)*155}]));
  const open=n=>{if(n.cardId)window.location.assign(`/conoscenze?card=${encodeURIComponent(n.cardId)}`);else if(n.type==='article'&&n.key!=='card')window.location.assign(`/conoscenze?domain=${encodeURIComponent(n.domain||domain)}&id=${encodeURIComponent(n.id)}`)};
- const edges=isProofV2?[['person','card'],['card','payload'],['payload','digest'],['digest','sepolia'],['sepolia','docs']]:shown.filter(n=>n.key!=='card').map(n=>['card',n.key]);
- return <main className="kg-shell"><header><a href="/conoscenze" className="kg-back">← Tutte le conoscenze</a><p className="kg-eye">KNOWLEDGE GRAPH</p><h1>{isProofV2?'N4K48 · Proof v2':`${article.domain||domain} ↔ ${articleId}`}</h1><p>{article.summary||article.description}</p>{isDynamic&&<p>Pubblicata da <strong>{requestedDynamic.publisher}</strong> · dati del catalogo pubblico MyZubster.</p>}</header><nav aria-label="Filtra i nodi">{['all','article','person','source','proof','concept'].filter(x=>x!=='proof'||isProofV2).map(x=><button key={x} className={filter===x?'active':''} onClick={()=>setFilter(x)}>{x==='all'?'Tutto':x}</button>)}</nav><section className="kg-work"><div className="kg-canvas"><svg viewBox="0 0 780 470" role="img" aria-label={`Grafo ${isProofV2?'N4K48 Proof v2':`${domain} ${articleId}`}`}>{edges.filter(([a,b])=>pos.has(a)&&pos.has(b)).map(([a,b])=><line key={`${a}-${b}`} x1={pos.get(a).x} y1={pos.get(a).y} x2={pos.get(b).x} y2={pos.get(b).y}/>)}{shown.map(n=>{const p=pos.get(n.key),sel=n.key===selected;return <g key={n.key} className="kg-node" transform={`translate(${p.x} ${p.y})`} role="button" aria-label={`${n.type}: ${n.title}`} tabIndex="0" onClick={()=>setSelected(n.key)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSelected(n.key)}}} onDoubleClick={()=>open(n)}><circle r={n.key==='card'?52:41} fill={sel?color[n.type]:'#10182d'} stroke={color[n.type]} strokeWidth={sel?4:2}/><text y="-3">{n.id.length>13?`${n.id.slice(0,12)}…`:n.id}</text><text className="type" y="17">{n.type}</text></g>})}</svg></div><aside><span className={`kg-badge ${active.type}`}>{active.type}</span><h2>{active.title}</h2><code>{active.id}</code><p>{active.description}</p>{active.cardId&&<button className="kg-open" onClick={()=>open(active)}>Apri nel grafo</button>}{active.url&&<a href={active.url} target="_blank" rel="noreferrer">Apri {active.key==='card'?'Knowledge Card':'evidenza'} ↗</a>}{active.extraUrl&&<a href={active.extraUrl} target="_blank" rel="noreferrer">Apri transazione di deploy ↗</a>}</aside></section><div className="kg-list" aria-label="Percorso delle evidenze">{nodes.map(n=><button key={n.key} className={selected===n.key?'active':''} onClick={()=>setSelected(n.key)}>{n.id} · {n.title}</button>)}</div>{isProofV2&&<p className="kg-limit">La Proof v2 collega crittograficamente il payload canonico al digest registrato su Sepolia. Non certifica automaticamente la veridicità delle competenze o delle dichiarazioni nella scheda.</p>}<footer>{nodes.length} nodi{isDynamic?' · dati pubblici MyZubster':''}</footer></main>;
+ const edges=isProofV2?[['person','card'],['card','payload'],['payload','digest'],['digest','sepolia'],['sepolia','docs'],...shown.filter(n=>n.key==='proof-v3'||n.key.startsWith('proof:v')).map(n=>['card',n.key])]:shown.filter(n=>n.key!=='card').map(n=>['card',n.key]);
+ return <main className="kg-shell"><header><a href="/conoscenze" className="kg-back">← Tutte le conoscenze</a><p className="kg-eye">KNOWLEDGE GRAPH</p><h1>{isProofV2?'N4K48 · Proof v2':`${article.domain||domain} ↔ ${articleId}`}</h1><p>{article.summary||article.description}</p>{isDynamic&&<p>Pubblicata da <strong>{requestedDynamic.publisher}</strong> · dati del catalogo pubblico MyZubster.</p>}</header><nav aria-label="Filtra i nodi">{['all','article','person','source','proof','concept'].filter(x=>x!=='proof'||isProofV2||nodes.some(n=>n.type==='proof')).map(x=><button key={x} className={filter===x?'active':''} onClick={()=>setFilter(x)}>{x==='all'?'Tutto':x}</button>)}</nav><section className="kg-work"><div className="kg-canvas"><svg viewBox="0 0 780 470" role="img" aria-label={`Grafo ${isProofV2?'N4K48 Proof v2':`${domain} ${articleId}`}`}>{edges.filter(([a,b])=>pos.has(a)&&pos.has(b)).map(([a,b])=><line key={`${a}-${b}`} x1={pos.get(a).x} y1={pos.get(a).y} x2={pos.get(b).x} y2={pos.get(b).y}/>)}{shown.map(n=>{const p=pos.get(n.key),sel=n.key===selected;return <g key={n.key} className="kg-node" transform={`translate(${p.x} ${p.y})`} role="button" aria-label={`${n.type}: ${n.title}`} tabIndex="0" onClick={()=>setSelected(n.key)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSelected(n.key)}}} onDoubleClick={()=>open(n)}><circle r={n.key==='card'?52:41} fill={sel?color[n.type]:'#10182d'} stroke={color[n.type]} strokeWidth={sel?4:2}/><text y="-3">{n.id.length>13?`${n.id.slice(0,12)}…`:n.id}</text><text className="type" y="17">{n.type}</text></g>})}</svg></div><aside><span className={`kg-badge ${active.type}`}>{active.type}</span><h2>{active.title}</h2><code>{active.id}</code><p>{active.description}</p>{active.cardId&&<button className="kg-open" onClick={()=>open(active)}>Apri nel grafo</button>}{active.url&&<a href={active.url} target="_blank" rel="noreferrer">Apri {active.key==='card'?'Knowledge Card':'evidenza'} ↗</a>}{active.extraUrl&&<a href={active.extraUrl} target="_blank" rel="noreferrer">Apri transazione di deploy ↗</a>}{active.proofVersion&&<p><strong>Versione:</strong> Proof v{active.proofVersion}</p>}{active.digest&&<p><strong>Digest:</strong> <code>{active.digest}</code></p>}{active.contract&&<p><strong>Contratto:</strong> {active.contract}</p>}{active.transaction&&<p><strong>Transazione:</strong> {active.transaction}</p>}{active.documentation&&<a href={active.documentation} target="_blank" rel="noreferrer">Apri documentazione Proof ↗</a>}</aside></section><div className="kg-list" aria-label="Percorso delle evidenze">{nodes.map(n=><button key={n.key} className={selected===n.key?'active':''} onClick={()=>setSelected(n.key)}>{n.id} · {n.title}</button>)}</div>{isProofV2&&<p className="kg-limit">La Proof v2 collega crittograficamente il payload canonico al digest registrato su Sepolia. Non certifica automaticamente la veridicità delle competenze o delle dichiarazioni nella scheda.</p>}<footer>{nodes.length} nodi{isDynamic?' · dati pubblici MyZubster':''}</footer></main>;
 }
