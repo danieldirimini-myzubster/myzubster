@@ -4,6 +4,11 @@ const { authenticate, optionalAuthenticate } = require('../middleware/auth');
 const { createZorgaxAccessMiddleware, publicAccess } = require('../middleware/zorgaxAccess');
 const ZorgaxDataEntry = require('../models/ZorgaxDataEntry');
 const { answer, searchWeb, previewData, digestPreview } = require('../services/zorgaxAssistantService');
+const {
+  EGRESS,
+  classifyData,
+  evaluateEgress
+} = require('../services/zorgaxPrivacyPolicyService');
 const { catalog, createCheckoutIntent, getPaymentIntent, listPaymentIntents } = require('../services/zorgaxLegacyMonetizationService');
 const { getAccess } = require('../services/zorgaxAccessService');
 const { refreshPaymentIntent, verifyAndActivatePaymentIntent } = require('../services/zorgaxPaymentIntentService');
@@ -249,12 +254,61 @@ router.post('/chat', optionalAuthenticate, loadZorgaxAccess, async (req, res) =>
 
 router.get('/research', authenticate, requireZorgaxPlan('developer'), async (req, res) => {
   try {
+    const query = String(req.query.q || '').trim();
+    if (!query) {
+      return res.status(400).json({
+        ok: false,
+        code: 'ZORGAX_RESEARCH_QUERY_REQUIRED',
+        error: 'Parametro q obbligatorio'
+      });
+    }
+
+    const classification = classifyData({ content: query });
+    const webDecision = evaluateEgress({
+      content: query,
+      declaredClassification: classification.classification,
+      destination: EGRESS.WEB_SEARCH
+    });
+
+    if (!webDecision.allowed) {
+      return res.status(403).json({
+        ok: false,
+        code: 'ZORGAX_PRIVACY_EXTERNAL_EGRESS_DENIED',
+        error: 'La policy privacy non consente ricerca web esterna per questa richiesta.',
+        privacy: {
+          classification: webDecision.classification,
+          processing_mode: webDecision.processingMode,
+          external_egress_allowed: false,
+          web_research_performed: false,
+          reason: webDecision.reason
+        }
+      });
+    }
+
     const requestedLimit = Number(req.query.limit);
-    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, req.zorgaxPolicy.maxWebResults) : req.zorgaxPolicy.maxWebResults;
-    const result = await searchWeb(req.query.q, limit);
-    res.json({ ok: true, entity: 'ZORGAX-001', ...result, read_only: true, access: publicAccess(req.zorgaxAccess) });
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, req.zorgaxPolicy.maxWebResults)
+      : req.zorgaxPolicy.maxWebResults;
+
+    const result = await searchWeb(query, limit);
+
+    res.json({
+      ok: true,
+      entity: 'ZORGAX-001',
+      ...result,
+      read_only: true,
+      privacy: {
+        classification: webDecision.classification,
+        processing_mode: webDecision.processingMode,
+        external_egress_allowed: true,
+        web_research_performed: true
+      },
+      access: publicAccess(req.zorgaxAccess)
+    });
   }
-  catch (error) { res.status(502).json({ ok: false, error: error.message }); }
+  catch (error) {
+    res.status(502).json({ ok: false, error: error.message });
+  }
 });
 
 router.post('/data/preview', (req, res) => {

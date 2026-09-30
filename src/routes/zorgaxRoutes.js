@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const ZorgaxMemory = require('../models/ZorgaxMemory');
 const { createMongoResearchStore } = require('../services/researchSearchService');
 const { createZorgaxResearchRag, ensureResearchCitationContract } = require('../services/zorgaxResearchRag');
+const { assertLocalOllamaUrl } = require('../services/zorgaxLocalAIService');
 
 const router = express.Router();
 
@@ -180,7 +181,8 @@ router.get('/profile', (req, res) => {
 
 router.get('/status', async (req, res) => {
   try {
-    const response = await fetch(`${OLLAMA_URL}/api/tags`);
+    const localOllamaUrl = assertLocalOllamaUrl(OLLAMA_URL);
+    const response = await fetch(`${localOllamaUrl}/api/tags`);
     if (!response.ok) throw new Error(`Ollama HTTP ${response.status}`);
 
     const data = await response.json();
@@ -429,7 +431,8 @@ router.post('/chat', async (req, res) => {
     if (research.context) messages.push({ role: 'system', content: research.context });
     messages.push({ role: 'user', content: userMessage.trim() });
 
-    const response = await fetch(`${OLLAMA_URL}/api/chat`, {
+    const localOllamaUrl = assertLocalOllamaUrl(OLLAMA_URL);
+    const response = await fetch(`${localOllamaUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: OLLAMA_MODEL, stream: false, messages })
