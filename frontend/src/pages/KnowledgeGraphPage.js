@@ -9,6 +9,13 @@ const color={article:'#ff4d8d',source:'#21d4b4',concept:'#8d7cff',person:'#f59e0
 const slug=v=>String(v||'').trim().toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,28)||'KNOWLEDGE';
 const proofCardId='6abaaefb3a7460c4574a45fd';
 const digest='6097e05866bafceec24663d2638cb1dae5742ac78284abbfd45cc9c3b0bfb845';
+const proofV3={
+ digest:'d1c89d2a4157a159b56e92825ca59fdb1f0e84e003b05e022af67da69ed25ac4',
+ payload:'https://github.com/nicolaususnicola-lgtm/myzubster-mvp/commit/e57261a325625057350aa059ca142f1eb84b30c2',
+ contract:'https://sepolia.etherscan.io/address/0x3233fA7f8c50Aa25d9B1263c25F28535B6eA59bF',
+ transaction:'https://sepolia.etherscan.io/tx/0x5c7717be6dc70e6416f8053c72bb1e2bec2b7c5462b23fcb9c4b1077f907fed4',
+ documentation:'https://github.com/nicolaususnicola-lgtm/myzubster-mvp/commit/148347838cf7bd1c1b83853311fd7a543f5e50e1'
+};
 const proofLinks={
  card:`https://www.myzubster.com/knowledge-card?id=${proofCardId}`,
  payload:'https://github.com/nicolaususnicola-lgtm/myzubster-mvp/commit/ecefd81c5c9da0be15c99aeeb83878480abd60a8',
@@ -43,12 +50,13 @@ export default function KnowledgeGraphPage(){
      const samePublisher=dynamic.filter(c=>c.publisher===requestedDynamic.publisher&&c.key!==requestedDynamic.key);
      const evidence=requestedDynamic.evidence||[];
      const sources=buildEvidenceNodes(requestedDynamic.key,evidence);
-     const versionedProofs=buildVersionedProofNodes(requestedDynamic.key,evidence);
+     const versionedProofs=buildVersionedProofNodes(requestedDynamic.key,evidence).filter(proof=>!(isProofV2&&proof.proofVersion==='2'));
      const groupedProofUrls=new Set(versionedProofs.flatMap(proof=>proof.canonicalUrls||[]));
      return [
        {key:'card',id:articleId,type:'article',title:requestedDynamic.title,description:requestedDynamic.description,url:`https://www.myzubster.com/knowledge-card?id=${encodeURIComponent(requestedDynamic.key)}`},
        {key:'person',id:isProofV2?'N4K48':slug(requestedDynamic.publisher),type:'person',title:requestedDynamic.publisher,description:'Profilo che ha pubblicato questa conoscenza',url:isProofV2?'https://github.com/nicolaususnicola-lgtm':undefined},
        ...(isProofV2?[
+         {key:'proof-v3',id:'PROOF V3',type:'proof',title:'MyZubsterProof v3 · Sepolia',description:`SHA-256: ${proofV3.digest}. Attestazione v3 distinta dalla storia di Proof v2.`,url:proofV3.contract,extraUrl:proofV3.transaction,proofVersion:'3',digest:proofV3.digest,contract:proofV3.contract,transaction:proofV3.transaction,documentation:proofV3.documentation},
          {key:'payload',id:'PAYLOAD V1',type:'source',title:'Contenuto canonico',description:'Commit con gli esatti byte del payload canonico della Knowledge Card.',url:proofLinks.payload},
          {key:'digest',id:'SHA-256',type:'proof',title:'Digest del payload',description:`SHA-256: ${digest}. Il digest si riferisce al payload canonico nel commit, non alla pagina web che può cambiare.`},
          {key:'sepolia',id:'PROOF V2',type:'proof',title:'MyZubsterProof · Sepolia',description:'Contratto della seconda prova con knowledgeHash() riferito al digest del payload. Rete di test Ethereum Sepolia.',url:proofLinks.contract,extraUrl:proofLinks.transaction},
