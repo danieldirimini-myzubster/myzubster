@@ -3,7 +3,7 @@ import {knowledgeArticles} from '../data/knowledge';
 import './KnowledgeGraphPage.css';
 import {technicalReviews} from '../data/technicalReviews';
 import TechnicalReviewGraph from './TechnicalReviewGraph';
-import {buildEvidenceNodes} from './knowledgeGraphEvidence';
+import {buildEvidenceNodes,buildVersionedProofNodes} from './knowledgeGraphEvidence';
 
 const color={article:'#ff4d8d',source:'#21d4b4',concept:'#8d7cff',person:'#f59e0b',proof:'#55a9ff'};
 const slug=v=>String(v||'').trim().toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,28)||'KNOWLEDGE';
@@ -52,7 +52,7 @@ export default function KnowledgeGraphPage(){
          {key:'docs',id:'DOCS',type:'source',title:'Metodo di verifica',description:'Commit GitHub con documentazione e comandi per ricalcolare il digest.',url:proofLinks.documentation}
        ]:[]),
        ...samePublisher.map(c=>({key:`a:${c.id}`,id:c.id,type:'article',title:c.title,description:c.description,domain:c.domain,cardId:c.key})),
-       ...sources.filter(s=>!proofUrls.has(s.canonicalUrl)||s.type==='proof'),
+       ...versionedProofs,\n       ...sources.filter(s=>!groupedProofUrls.has(s.canonicalUrl)),
        {key:`c:${slug(requestedDynamic.domain)}`,id:slug(requestedDynamic.domain),type:'concept',title:requestedDynamic.domain,description:'Ambito della conoscenza'}
      ];
    }
