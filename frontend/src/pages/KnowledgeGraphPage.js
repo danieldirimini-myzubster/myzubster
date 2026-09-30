@@ -64,7 +64,7 @@ export default function KnowledgeGraphPage(){
        ]:[]),
        ...samePublisher.map(c=>({key:`a:${c.id}`,id:c.id,type:'article',title:c.title,description:c.description,domain:c.domain,cardId:c.key})),
        ...versionedProofs,
-       ...sources.filter(s=>!groupedProofUrls.has(s.canonicalUrl)),
+       ...sources.filter(s=>s.type!=='proof'&&!groupedProofUrls.has(s.canonicalUrl)),
        {key:`c:${slug(requestedDynamic.domain)}`,id:slug(requestedDynamic.domain),type:'concept',title:requestedDynamic.domain,description:'Ambito della conoscenza'}
      ];
    }
