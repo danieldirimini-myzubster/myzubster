@@ -3,6 +3,7 @@ import {knowledgeArticles} from '../data/knowledge';
 import './KnowledgeGraphPage.css';
 import {technicalReviews} from '../data/technicalReviews';
 import TechnicalReviewGraph from './TechnicalReviewGraph';
+import {buildEvidenceNodes} from './knowledgeGraphEvidence';
 
 const color={article:'#ff4d8d',source:'#21d4b4',concept:'#8d7cff',person:'#f59e0b',proof:'#55a9ff'};
 const slug=v=>String(v||'').trim().toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,28)||'KNOWLEDGE';
@@ -40,7 +41,7 @@ export default function KnowledgeGraphPage(){
  const nodes=useMemo(()=>{
    if(isDynamic){
      const samePublisher=dynamic.filter(c=>c.publisher===requestedDynamic.publisher&&c.key!==requestedDynamic.key);
-     const sources=(requestedDynamic.evidence||[]).filter(x=>x.url).map((x,i)=>({key:`s:${i}`,id:`SRC-${i+1}`,type:'source',title:x.label||'Fonte',description:x.note||x.url,url:x.url}));
+     const sources=buildEvidenceNodes(requestedDynamic.key,requestedDynamic.evidence||[]);
      return [
        {key:'card',id:articleId,type:'article',title:requestedDynamic.title,description:requestedDynamic.description,url:`https://www.myzubster.com/knowledge-card?id=${encodeURIComponent(requestedDynamic.key)}`},
        {key:'person',id:isProofV2?'N4K48':slug(requestedDynamic.publisher),type:'person',title:requestedDynamic.publisher,description:'Profilo che ha pubblicato questa conoscenza',url:isProofV2?'https://github.com/nicolaususnicola-lgtm':undefined},
@@ -51,7 +52,7 @@ export default function KnowledgeGraphPage(){
          {key:'docs',id:'DOCS',type:'source',title:'Metodo di verifica',description:'Commit GitHub con documentazione e comandi per ricalcolare il digest.',url:proofLinks.documentation}
        ]:[]),
        ...samePublisher.map(c=>({key:`a:${c.id}`,id:c.id,type:'article',title:c.title,description:c.description,domain:c.domain,cardId:c.key})),
-       ...sources.filter(s=>!isProofV2||![proofLinks.payload,proofLinks.contract,proofLinks.transaction,proofLinks.documentation].includes(s.url)),
+       ...sources,
        {key:`c:${slug(requestedDynamic.domain)}`,id:slug(requestedDynamic.domain),type:'concept',title:requestedDynamic.domain,description:'Ambito della conoscenza'}
      ];
    }
