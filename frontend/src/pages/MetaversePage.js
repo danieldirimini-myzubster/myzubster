@@ -13,6 +13,8 @@ import {
 } from '../api/metaverse';
 import MetaverseExperiencePanel from '../components/MetaverseExperiencePanel';
 import { conversionContext, trackConversionOnce } from '../analytics/conversionAnalytics';
+import { bindAuthExpiryRedirect } from '../auth/authExpiryRedirect';
+import { useMetaverseIdentity } from '../auth/metaverseIdentity';
 import './MetaversePage.css';
 
 const STORAGE_KEY = 'myz-metaverse-profile-v1';
@@ -20,27 +22,27 @@ const SYNC_INTERVAL_MS = 1800;
 const MISSION_PROGRESS_PREFIX = 'myz-metaverse-mission-v1:';
 
 const ARCHETYPES = {
-  guardian: { label: 'Guardian', glyph: '🛡️' },
-  explorer: { label: 'Explorer', glyph: '🧭' },
-  maker: { label: 'Maker', glyph: '🛠️' },
-  chronicler: { label: 'Chronicler', glyph: '📖' },
-  scientist: { label: 'Scientist', glyph: '🔬' }
+  guardian: { label: 'Guardian', glyph: '???' },
+  explorer: { label: 'Explorer', glyph: '??' },
+  maker: { label: 'Maker', glyph: '???' },
+  chronicler: { label: 'Chronicler', glyph: '??' },
+  scientist: { label: 'Scientist', glyph: '??' }
 };
 
 const EMOTES = {
-  wave: '👋',
-  spark: '✨',
-  idea: '💡',
-  leaf: '🌱'
+  wave: '??',
+  spark: '?',
+  idea: '??',
+  leaf: '??'
 };
 
 const LANDMARKS = [
-  { id: 'identity', label: 'Identity Hall', icon: '🪪', x: 10, y: 15, href: '/social-login' },
-  { id: 'marketplace', label: 'Marketplace', icon: '🛒', x: 34, y: 14, href: '/marketplace' },
-  { id: 'projects', label: 'LIFE Projects', icon: '🌱', x: 56, y: 14, href: '/life-pilot' },
-  { id: 'visual', label: 'Visual Gallery', icon: '🎨', x: 78, y: 14, href: '/fumetto' },
-  { id: 'zorgax', label: 'Zorgax Observatory', icon: '👁️', x: 70, y: 62, href: '/zorgax' },
-  { id: 'creator', label: 'Creator Lab', icon: '⚙️', x: 15, y: 62, href: '/come-funziona' }
+  { id: 'identity', label: 'Identity Hall', icon: '??', x: 10, y: 15, href: '/social-login' },
+  { id: 'marketplace', label: 'Marketplace', icon: '??', x: 34, y: 14, href: '/marketplace' },
+  { id: 'projects', label: 'LIFE Projects', icon: '??', x: 56, y: 14, href: '/life-pilot' },
+  { id: 'visual', label: 'Visual Gallery', icon: '??', x: 78, y: 14, href: '/fumetto' },
+  { id: 'zorgax', label: 'Zorgax Observatory', icon: '???', x: 70, y: 62, href: '/zorgax' },
+  { id: 'creator', label: 'Creator Lab', icon: '??', x: 15, y: 62, href: '/come-funziona' }
 ];
 
 const LANDMARK_IDS = new Set(LANDMARKS.map((landmark) => landmark.id));
@@ -111,7 +113,7 @@ function VerifiedCharacterList({ characters }) {
               <small>{character.displayName}</small>
               {githubLogin && (
                 <a href={character.github.profileUrl || `https://github.com/${githubLogin}`} target="_blank" rel="noreferrer">
-                  @{githubLogin} ↗
+                  @{githubLogin} ?
                 </a>
               )}
             </div>
@@ -123,7 +125,7 @@ function VerifiedCharacterList({ characters }) {
   );
 }
 
-function AvatarCreator({ initialProfile, authenticated, busy, error, totalCharacters, featuredCharacters, onEnter }) {
+function AvatarCreator({ initialProfile, authenticated, identityChecking, busy, error, totalCharacters, featuredCharacters, onEnter }) {
   const [displayName, setDisplayName] = useState(initialProfile?.displayName || '');
   const formattedTotal = formatCharacterCount(totalCharacters);
 
@@ -146,19 +148,21 @@ function AvatarCreator({ initialProfile, authenticated, busy, error, totalCharac
 
   return (
     <div className="metaverse-entry-shell">
-      <a href="/" style={{ position: 'fixed', top: 18, left: 18, color: '#eaf7ff', textDecoration: 'none', fontWeight: 800 }}>← Home MyZubster</a>
+      <a href="/" style={{ position: 'fixed', top: 18, left: 18, color: '#eaf7ff', textDecoration: 'none', fontWeight: 800 }}> Home MyZubster</a>
       <section className="metaverse-entry-card">
         <div className="metaverse-kicker">MYZUBSTER WORLD</div>
         <h2>Entra nel mondo</h2>
         {formattedTotal && (
           <p className="metaverse-muted">
-            🌍 <strong>{formattedTotal}</strong> {totalCharacters === 1 ? 'personaggio creato' : 'personaggi creati'}
+            ?? <strong>{formattedTotal}</strong> {totalCharacters === 1 ? 'personaggio creato' : 'personaggi creati'}
           </p>
         )}
         <p>
-          {authenticated
-            ? 'Il tuo account MyZubster è attivo. Entrando verrà usato automaticamente il personaggio verificato collegato al tuo account.'
-            : 'Scegli un nome e inizia subito. Il personaggio viene creato automaticamente; potrai personalizzarlo più avanti.'}
+          {identityChecking
+            ? 'Verifica della sessione MyZubster in corso.'
+            : authenticated
+            ? 'Il tuo account MyZubster � attivo. Entrando verr� usato automaticamente il personaggio verificato collegato al tuo account.'
+            : 'Scegli un nome e inizia subito. Il personaggio viene creato automaticamente; potrai personalizzarlo pi� avanti.'}
         </p>
 
         <form onSubmit={submit} className="metaverse-form">
@@ -178,8 +182,8 @@ function AvatarCreator({ initialProfile, authenticated, busy, error, totalCharac
 
           {error && <div className="metaverse-error">{error}</div>}
 
-          <button className="metaverse-primary" type="submit" disabled={busy}>
-            {busy ? 'Ingresso…' : authenticated ? 'Entra con il tuo account' : 'Entra come ospite'}
+          <button className="metaverse-primary" type="submit" disabled={busy || identityChecking}>
+            {identityChecking ? 'Verifica sessione.' : busy ? 'Ingresso.' : authenticated ? 'Entra con il tuo account' : 'Entra come ospite'}
           </button>
         </form>
 
@@ -205,7 +209,11 @@ function AvatarCreator({ initialProfile, authenticated, busy, error, totalCharac
 
 function MetaversePage() {
   const initialProfile = useMemo(savedProfile, []);
-  const [authenticated, setAuthenticated] = useState(() => Boolean(localStorage.getItem('myzubster-token')));
+  const {
+    authenticated,
+    checking: identityChecking,
+    error: identityError
+  } = useMetaverseIdentity();
   const [profile, setProfile] = useState(initialProfile);
   const [sessionId, setSessionId] = useState(null);
   const [players, setPlayers] = useState({});
@@ -220,12 +228,18 @@ function MetaversePage() {
   const [discoverableRooms, setDiscoverableRooms] = useState([]);
   const [visitedLandmarks, setVisitedLandmarks] = useState([]);
 
+  useEffect(() => bindAuthExpiryRedirect(), []);
+
   useEffect(() => {
     trackConversionOnce('metaverse_loaded', conversionContext({ surface: 'neon_plaza' }));
   }, []);
 
   useEffect(() => {
-    if (!authenticated) return undefined;
+    if (identityError) setError('Impossibile verificare la sessione. Riprova tra poco.');
+  }, [identityError]);
+
+  useEffect(() => {
+    if (identityChecking || !authenticated) return undefined;
     let active = true;
 
     getMetaverseProfile()
@@ -246,10 +260,6 @@ function MetaversePage() {
       .catch((profileError) => {
         if (!active) return;
         if (profileError.status === 401) {
-          localStorage.removeItem('myzubster-token');
-          localStorage.removeItem(STORAGE_KEY);
-          setProfile(null);
-          setAuthenticated(false);
           setError('Sessione scaduta. Accedi di nuovo per usare il tuo personaggio verificato.');
           return;
         }
@@ -257,7 +267,7 @@ function MetaversePage() {
       });
 
     return () => { active = false; };
-  }, [authenticated]);
+  }, [authenticated, identityChecking]);
 
   useEffect(() => {
     let active = true;
@@ -495,6 +505,7 @@ function MetaversePage() {
       <AvatarCreator
         initialProfile={profile}
         authenticated={authenticated}
+        identityChecking={identityChecking}
         busy={busy}
         error={error}
         totalCharacters={totalCharacters}
@@ -510,16 +521,17 @@ function MetaversePage() {
     <div className="metaverse-page">
       <header className="metaverse-topbar">
         <div>
-          <strong>🪐 MyZubster World</strong>
+          <strong>?? MyZubster World</strong>
           <span className={`metaverse-status status-${status}`}>{status}</span>
         </div>
         <div className="metaverse-topbar-meta">
+          {authenticated && <a href="/account/security">Sessioni e sicurezza</a>}
           {formattedTotal && (
             <span>{formattedTotal} {totalCharacters === 1 ? 'personaggio creato' : 'personaggi creati'}</span>
           )}
           <span>{Object.keys(players).length} online</span>
           <span>{lastLandmark}</span>
-          <a href="/" style={{ color: '#cfe5ef', textDecoration: 'none', fontWeight: 800 }}>← Home</a>
+          <a href="/" style={{ color: '#cfe5ef', textDecoration: 'none', fontWeight: 800 }}> Home</a>
           <button onClick={resetProfile}>Cambia personaggio</button>
         </div>
       </header>
@@ -551,22 +563,22 @@ function MetaversePage() {
                 key={player.id}
                 className={`metaverse-avatar archetype-${player.archetype} ${isMe ? 'is-me' : ''}`}
                 style={{ left: `${player.x}%`, top: `${player.y}%` }}
-                title={`${player.characterName} — ${player.displayName}`}
+                title={`${player.characterName} - ${player.displayName}`}
               >
-                {player.emote && <div className="metaverse-emote">{EMOTES[player.emote] || '✨'}</div>}
+                {player.emote && <div className="metaverse-emote">{EMOTES[player.emote] || '?'}</div>}
                 <div className="metaverse-avatar-body">{archetype.glyph}</div>
                 <strong>{player.characterName}</strong>
-                <small>{isMe ? 'TU · ' : ''}{isAccountLinked(player.identityStatus) ? 'MYZ VERIFIED' : 'OSPITE'}</small>
+                <small>{isMe ? 'TU � ' : ''}{isAccountLinked(player.identityStatus) ? 'MYZ VERIFIED' : 'OSPITE'}</small>
               </div>
             );
           })}
 
           <div className="metaverse-controls" aria-label="Movement controls">
-            <button onClick={() => moveBy(0, -2.5)}>▲</button>
+            <button onClick={() => moveBy(0, -2.5)}></button>
             <div>
-              <button onClick={() => moveBy(-2.5, 0)}>◀</button>
-              <button onClick={() => moveBy(0, 2.5)}>▼</button>
-              <button onClick={() => moveBy(2.5, 0)}>▶</button>
+              <button onClick={() => moveBy(-2.5, 0)}>?</button>
+              <button onClick={() => moveBy(0, 2.5)}></button>
+              <button onClick={() => moveBy(2.5, 0)}>?</button>
             </div>
             <small>WASD / frecce</small>
           </div>
@@ -576,13 +588,13 @@ function MetaversePage() {
           <section className="metaverse-panel">
             <h3>Il tuo personaggio</h3>
             <div className="metaverse-profile-line">
-              <span className="metaverse-profile-glyph">{ARCHETYPES[me?.archetype]?.glyph || '🧭'}</span>
+              <span className="metaverse-profile-glyph">{ARCHETYPES[me?.archetype]?.glyph || '??'}</span>
               <div>
                 <strong>{me?.characterName}</strong>
                 <small>{me?.displayName || profile?.displayName}</small>
                 {me?.github?.login && (
                   <a href={me.github.profileUrl || `https://github.com/${me.github.login}`} target="_blank" rel="noreferrer">
-                    @{me.github.login} ↗
+                    @{me.github.login} ?
                   </a>
                 )}
               </div>
@@ -613,7 +625,7 @@ function MetaversePage() {
             <h3>Persone vicine</h3>
             {nearby.length === 0 ? <p className="metaverse-muted">Muoviti nella Plaza per incontrare qualcuno.</p> : nearby.map((player) => (
               <div className="metaverse-nearby" key={player.id}>
-                <span>{ARCHETYPES[player.archetype]?.glyph || '🧭'}</span>
+                <span>{ARCHETYPES[player.archetype]?.glyph || '??'}</span>
                 <div><strong>{player.characterName}</strong><small>{player.displayName}</small></div>
               </div>
             ))}
@@ -638,7 +650,7 @@ function MetaversePage() {
               ))}
             </div>
             <form onSubmit={submitChat} className="metaverse-chat-form">
-              <input maxLength={280} value={chatText} onChange={(event) => setChatText(event.target.value)} placeholder="Scrivi un messaggio…" />
+              <input maxLength={280} value={chatText} onChange={(event) => setChatText(event.target.value)} placeholder="Scrivi un messaggio." />
               <button type="submit">Invia</button>
             </form>
           </section>
@@ -652,3 +664,4 @@ function MetaversePage() {
 
 export { LANDMARKS, sanitizeVisitedLandmarks };
 export default MetaversePage;
+

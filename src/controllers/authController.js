@@ -1,6 +1,12 @@
 const User = require('../models/User');
-const MetaverseCharacter = require('../../backend/src/models/MetaverseCharacter');
+const mongoose = require('mongoose');
+const { createMetaverseCharacterModel } = require('../../backend/src/models/MetaverseCharacter');
+const MetaverseCharacter = createMetaverseCharacterModel(mongoose);
 const jwt = require('jsonwebtoken');
+const {
+  issueSession,
+  setSessionCookies
+} = require('../services/authSessionService');
 
 function isValidMoneroAddress(value) {
   if (!value) return true;
@@ -250,7 +256,7 @@ exports.register = async (req, res) => {
     const checks = [{ email }, { username }];
     if (github?.id) checks.push({ 'github.id': github.id });
     const existingUser = await User.findOne({ $or: checks });
-    if (existingUser) return res.status(400).json({ success: false, message: 'Username, email o account GitHub già in uso' });
+    if (existingUser) return res.status(400).json({ success: false, message: 'Username, email o account GitHub gi� in uso' });
 
     const user = new User({
       username,
@@ -278,11 +284,8 @@ exports.register = async (req, res) => {
       }
     }
 
-    const token = jwt.sign(
-      { userId: user._id, username: user.username, role: user.role },
-      jwtSecret(),
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-    );
+    const session = await issueSession(user, req);
+    setSessionCookies(res, session);
 
     res.status(201).json({
       success: true,
@@ -299,7 +302,11 @@ exports.register = async (req, res) => {
         },
         character: publicCharacter(character),
         characterAutomation: github?.id ? (character ? 'ready' : 'retry-on-login') : 'requires-verified-github',
-        token
+        token: session.token,
+        session: {
+          id: session.sessionId,
+          expiresAt: session.expiresAt
+        }
       }
     });
   } catch (error) {
@@ -331,11 +338,8 @@ exports.login = async (req, res) => {
       }
     }
 
-    const token = jwt.sign(
-      { userId: user._id, username: user.username, role: user.role },
-      jwtSecret(),
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-    );
+    const session = await issueSession(user, req);
+    setSessionCookies(res, session);
 
     res.json({
       success: true,
@@ -352,7 +356,11 @@ exports.login = async (req, res) => {
         },
         character: publicCharacter(character),
         characterAutomation: user.github?.id ? (character ? 'ready' : 'retry-next-login') : 'requires-verified-github',
-        token
+        token: session.token,
+        session: {
+          id: session.sessionId,
+          expiresAt: session.expiresAt
+        }
       }
     });
   } catch (error) {
@@ -379,3 +387,4 @@ exports.getProfile = async (req, res) => {
     res.status(500).json({ success: false, message: 'Errore durante il recupero del profilo', error: error.message });
   }
 };
+

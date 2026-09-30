@@ -122,11 +122,15 @@ describe('social OAuth callback safety', () => {
 
     await socialAuthController.callback(req, res);
 
-    expect(upsertVerifiedAccount).toHaveBeenCalledWith('facebook', {
-      id: 'fb-user-1',
-      name: 'Dani El',
-      avatarUrl: 'https://example.test/avatar.jpg'
-    });
+    expect(upsertVerifiedAccount).toHaveBeenCalledWith(
+      'facebook',
+      {
+        id: 'fb-user-1',
+        name: 'Dani El',
+        avatarUrl: 'https://example.test/avatar.jpg'
+      },
+      { request: req }
+    );
     const profileUrl = new URL(global.fetch.mock.calls[1][0]);
     expect(profileUrl.searchParams.get('fields')).toBe('id,name,picture');
     expect(redirectedParams(res).get('social_login')).toBe('verified');

@@ -2,12 +2,14 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const router = express.Router();
 const authController = require('../controllers/authController');
+const authSessionController = require('../controllers/authSessionController');
 const socialAuthController = require('../controllers/socialAuthController');
 const emailProfileController = require('../controllers/emailProfileController');
 const culturalContributorController = require('../controllers/culturalContributorController');
 const zorgaxCulturalController = require('../controllers/zorgaxCulturalController');
 const User = require('../models/User');
 const { authenticate } = require('../middleware/auth');
+const { requireTrustedOrigin } = require('../middleware/csrf');
 const { decryptToken, updateBio, updateProfileReadme } = require('../services/githubProfileAutomation');
 
 function legacyOrSocialCallback(provider, legacyHandler) {
@@ -28,18 +30,23 @@ function validateRegistration(req, res, next) {
   return next();
 }
 
-router.post('/register', validateRegistration, authController.register);
-router.post('/login', authController.login);
+router.post('/register', requireTrustedOrigin, validateRegistration, authController.register);
+router.post('/login', requireTrustedOrigin, authController.login);
 router.get('/github/start', authController.githubStart);
 router.get('/github/callback', legacyOrSocialCallback('github', authController.githubCallback));
-router.post('/github/verify-ticket', authController.githubVerifyTicket);
+router.post('/github/verify-ticket', requireTrustedOrigin, authController.githubVerifyTicket);
 router.get('/social/providers', socialAuthController.providers);
 router.get('/social/:provider/start', socialAuthController.start);
 router.get('/social/:provider/callback', socialAuthController.callback);
-router.post('/social/exchange-ticket', socialAuthController.exchangeTicket);
+router.post('/social/exchange-ticket', requireTrustedOrigin, socialAuthController.exchangeTicket);
+router.post('/refresh', requireTrustedOrigin, authSessionController.refresh);
+router.post('/logout', requireTrustedOrigin, authSessionController.logout);
+router.get('/me', authenticate, authController.getProfile);
+router.get('/me/sessions', authenticate, authSessionController.getSessions);
+router.delete('/me/sessions/:sessionId', authenticate, authSessionController.revokeSession);
 router.get('/gmail/start', emailProfileController.gmailStart);
 router.get('/gmail/callback', legacyOrSocialCallback('google', emailProfileController.gmailCallback));
-router.post('/gmail/verify-ticket', emailProfileController.verifyDraft);
+router.post('/gmail/verify-ticket', requireTrustedOrigin, emailProfileController.verifyDraft);
 router.get('/gmail/auto-sync/cron', emailProfileController.runAutoSync);
 router.get('/profile', authenticate, authController.getProfile);
 router.get('/github/public-snapshot', authenticate, async (req, res) => {
@@ -184,7 +191,7 @@ router.put('/github/automation', authenticate, async (req, res) => {
   const enabled = req.body?.enabled === true;
   const user = await User.findById(req.userId);
   if (!user) return res.status(404).json({ success: false, message: 'Utente non trovato' });
-  if (enabled && !user.github?.login) return res.status(409).json({ success: false, message: 'Collega e verifica GitHub prima di attivare l’automazione' });
+  if (enabled && !user.github?.login) return res.status(409).json({ success: false, message: "Collega e verifica GitHub prima di attivare l'automazione" });
   user.githubAutomation.enabled = enabled;
   user.githubAutomation.updatedAt = new Date();
   if (enabled && !user.githubAutomation.consentedAt) user.githubAutomation.consentedAt = new Date();
@@ -196,7 +203,7 @@ router.post('/github/automation/apply', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select('+githubAutomation.accessTokenEncrypted github githubAutomation');
     if (!user?.github?.login) return res.status(409).json({ success:false, message:'Collega GitHub prima di applicare modifiche' });
-    if (!user.githubAutomation?.enabled) return res.status(409).json({ success:false, message:'Attiva prima l’automazione GitHub' });
+    if (!user.githubAutomation?.enabled) return res.status(409).json({ success:false, message:"Attiva prima l'automazione GitHub" });
     if (!user.githubAutomation?.accessTokenEncrypted) return res.status(403).json({ success:false, message:'Autorizza prima le modifiche GitHub' });
     const bio = typeof req.body?.bio === 'string' ? req.body.bio.trim() : '';
     const readme = typeof req.body?.readme === 'string' ? req.body.readme.trim() : '';
@@ -226,3 +233,4 @@ router.post('/gmail/auto-sync/start-url', authenticate, emailProfileController.a
 router.get('/gmail/auto-sync/status', authenticate, emailProfileController.autoSyncStatus);
 router.delete('/gmail/auto-sync', authenticate, emailProfileController.disableAutoSync);
 module.exports = router;
+

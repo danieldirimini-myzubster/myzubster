@@ -1,0 +1,239 @@
+.account-security-page {
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 24px;
+  color: #eef8ff;
+  background:
+    radial-gradient(circle at 15% 5%, rgba(34, 211, 238, .13), transparent 34rem),
+    radial-gradient(circle at 85% 20%, rgba(139, 92, 246, .13), transparent 30rem),
+    #060b14;
+}
+
+.account-security-header,
+.account-security-card,
+.account-security-notice,
+.account-security-error {
+  width: min(100%, 960px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.account-security-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.account-security-header a {
+  color: #8be9fd;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.account-security-card {
+  box-sizing: border-box;
+  margin-bottom: 18px;
+  padding: 24px;
+  border: 1px solid #243751;
+  border-radius: 20px;
+  background: rgba(12, 22, 36, .92);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .24);
+}
+
+.account-security-hero {
+  background: linear-gradient(135deg, rgba(13, 35, 54, .97), rgba(28, 20, 54, .94));
+}
+
+.account-security-kicker {
+  color: #67e8f9;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .11em;
+}
+
+.account-security-card h1 {
+  margin: 8px 0;
+  font-size: clamp(2rem, 7vw, 3.4rem);
+}
+
+.account-security-card h2,
+.account-security-card p {
+  margin: 0;
+}
+
+.account-security-card p {
+  color: #aebdca;
+  line-height: 1.55;
+}
+
+.account-security-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 20px;
+  padding: 14px 16px;
+  border: 1px solid rgba(103, 232, 249, .3);
+  border-radius: 12px;
+  background: rgba(103, 232, 249, .07);
+}
+
+.account-security-identity span {
+  color: #aebdca;
+}
+
+.account-security-notice,
+.account-security-error {
+  box-sizing: border-box;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border-radius: 12px;
+}
+
+.account-security-notice {
+  color: #bbf7d0;
+  border: 1px solid rgba(74, 222, 128, .35);
+  background: rgba(74, 222, 128, .1);
+}
+
+.account-security-error {
+  display: grid;
+  gap: 5px;
+  color: #fecaca;
+  border: 1px solid rgba(248, 113, 113, .4);
+  background: rgba(248, 113, 113, .1);
+}
+
+.account-security-section-heading,
+.account-security-logout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.account-security-section-heading p,
+.account-security-logout p {
+  margin-top: 5px;
+}
+
+.account-security-session-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.account-security-session {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 17px;
+  border: 1px solid #273a53;
+  border-radius: 15px;
+  background: #091321;
+}
+
+.account-security-session.is-current {
+  border-color: rgba(34, 211, 238, .55);
+  background: rgba(34, 211, 238, .07);
+}
+
+.account-security-device-icon {
+  color: #67e8f9;
+  font-size: 23px;
+}
+
+.account-security-session-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.account-security-session-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-security-session-title span {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  color: #a7f3d0;
+  border: 1px solid rgba(52, 211, 153, .35);
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.account-security-session dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin: 11px 0 0;
+  color: #9fb0c1;
+  font-size: 12px;
+}
+
+.account-security-session dl div {
+  display: flex;
+  gap: 5px;
+}
+
+.account-security-session dt {
+  font-weight: 800;
+}
+
+.account-security-session dd {
+  margin: 0;
+}
+
+.account-security-primary,
+.account-security-secondary,
+.account-security-danger {
+  display: inline-block;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight: 850;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.account-security-primary {
+  margin: 12px 0;
+  color: #041117;
+  background: #67e8f9;
+}
+
+.account-security-secondary {
+  color: #dbeafe;
+  border: 1px solid #3b4f69;
+  background: #142238;
+}
+
+.account-security-danger {
+  color: #fee2e2;
+  border: 1px solid rgba(248, 113, 113, .48);
+  background: rgba(127, 29, 29, .36);
+}
+
+.account-security-secondary:disabled,
+.account-security-danger:disabled {
+  cursor: wait;
+  opacity: .55;
+}
+
+.account-security-empty {
+  padding: 18px;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .account-security-page { padding: 15px; }
+  .account-security-card { padding: 18px; }
+  .account-security-session { grid-template-columns: auto minmax(0, 1fr); }
+  .account-security-session .account-security-danger { grid-column: 1 / -1; width: 100%; }
+  .account-security-section-heading,
+  .account-security-logout { align-items: flex-start; flex-direction: column; }
+}
+

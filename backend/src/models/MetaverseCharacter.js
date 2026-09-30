@@ -1,5 +1,6 @@
-const mongoose = require('mongoose');
+const defaultMongoose = require('mongoose');
 
+function createMetaverseCharacterModel(mongoose = defaultMongoose) {
 const metaverseCharacterSchema = new mongoose.Schema({
   characterId: { type: String, required: true, unique: true, index: true, trim: true },
   displayName: { type: String, required: true, trim: true, maxlength: 30 },
@@ -19,4 +20,10 @@ const metaverseCharacterSchema = new mongoose.Schema({
 metaverseCharacterSchema.index({ worldId: 1, createdAt: -1 });
 metaverseCharacterSchema.index({ 'github.id': 1 }, { unique: true, sparse: true });
 metaverseCharacterSchema.index({ 'identityProviders.provider': 1, 'identityProviders.providerId': 1 });
-module.exports = mongoose.models.MetaverseCharacter || mongoose.model('MetaverseCharacter', metaverseCharacterSchema);
+return mongoose.models.MetaverseCharacter || mongoose.model('MetaverseCharacter', metaverseCharacterSchema);
+}
+
+const MetaverseCharacter = createMetaverseCharacterModel();
+
+module.exports = MetaverseCharacter;
+module.exports.createMetaverseCharacterModel = createMetaverseCharacterModel;
