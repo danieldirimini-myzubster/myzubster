@@ -1,4 +1,4 @@
-import {buildEvidenceNodes, evidenceKey, isProofEvidence, normalizeEvidenceUrl} from './knowledgeGraphEvidence';
+import {buildEvidenceNodes, buildVersionedProofNodes, evidenceKey, isProofEvidence, normalizeEvidenceUrl} from './knowledgeGraphEvidence';
 
 const card='6abaaefb3a7460c4574a45fd';
 
@@ -59,4 +59,21 @@ test('removed public evidence is not retained in the rebuilt current graph',()=>
 test('different cards do not share an evidence identity even for the same URL',()=>{
   const url='https://example.com/shared';
   expect(evidenceKey(card,url)).not.toBe(evidenceKey('another-card',url));
+});
+
+
+test('groups Proof v3 evidence into one distinct verifiable attestation',()=>{
+  const evidence=[
+    {type:'proof',proofVersion:3,label:'Proof v3 digest',url:'https://example.com/digest'},
+    {type:'proof',proofVersion:3,label:'Proof v3 contract',url:'https://sepolia.etherscan.io/address/0x123'},
+    {type:'proof',proofVersion:3,label:'Proof v3 transaction',url:'https://sepolia.etherscan.io/tx/0xabc'},
+    {type:'proof',proofVersion:3,label:'Proof v3 documentation',url:'https://example.com/docs'}
+  ];
+  const proofs=buildVersionedProofNodes(card,evidence);
+  expect(proofs).toHaveLength(1);
+  expect(proofs[0].id).toBe('PROOF V3');
+  expect(proofs[0].evidenceIds).toHaveLength(4);
+  expect(proofs[0].contract).toContain('/address/');
+  expect(proofs[0].transaction).toContain('/tx/');
+  expect(proofs[0].documentation).toBe('https://example.com/docs');
 });
