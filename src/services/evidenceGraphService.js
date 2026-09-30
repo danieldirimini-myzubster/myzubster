@@ -11,7 +11,10 @@ const NODE_TYPES = Object.freeze([
   'canonical-payload',
   'digest',
   'attestation',
-  'credential'
+  'credential',
+  'contribution',
+  'bounty',
+  'settlement'
 ]);
 
 const RELATIONS = Object.freeze([
@@ -22,7 +25,10 @@ const RELATIONS = Object.freeze([
   'CANONICALIZED_AS',
   'HASHED_AS',
   'ATTESTED_BY',
-  'CREDENTIALED_BY'
+  'CREDENTIALED_BY',
+  'CONTRIBUTED_TO',
+  'ACCEPTED_AS',
+  'SETTLED_AS'
 ]);
 
 function stableObject(value) {
@@ -103,6 +109,40 @@ function buildEvidenceGraph(input = {}) {
     }
     if (!ids.has(edge.to)) {
       throw new Error(`Evidence graph edge references missing to node: ${edge.to}`);
+    }
+
+    if (edge.relation === 'SETTLED_AS') {
+      const bounty = nodes.find(node => node.id === edge.from);
+      const settlement = nodes.find(node => node.id === edge.to);
+
+      if (!bounty || bounty.type !== 'bounty') {
+        throw new Error(
+          'SETTLED_AS requires a bounty source node'
+        );
+      }
+
+      if (
+        !settlement ||
+        settlement.type !== 'settlement' ||
+        settlement.metadata?.status !== 'paid' ||
+        edge.verificationStatus !== 'confirmed'
+      ) {
+        throw new Error(
+          'SETTLED_AS requires a confirmed paid settlement'
+        );
+      }
+
+      if (!settlement.metadata?.txId) {
+        throw new Error(
+          'SETTLED_AS requires a paid settlement with txId'
+        );
+      }
+
+      if (!settlement.metadata?.sourceReference) {
+        throw new Error(
+          'SETTLED_AS requires a paid settlement with sourceReference'
+        );
+      }
     }
   }
 
@@ -435,3 +475,168 @@ function attachKnowledgeCard(graphInput = {}, cardInput = {}) {
 }
 
 module.exports.attachKnowledgeCard = attachKnowledgeCard;
+
+function projectContributorEvidence(input = {}) {
+  const contribution = input.contribution || {};
+  const github = input.github || {};
+  const bounty = input.bounty || {};
+
+  const subject = clean(contribution.authorId);
+  const contributionId = clean(contribution.contributionId);
+  const title = clean(contribution.title);
+  const reference = clean(contribution.reference);
+
+  if (!subject) {
+    throw new Error('Contributor evidence requires contribution.authorId');
+  }
+
+  if (!contributionId) {
+    throw new Error('Contributor evidence requires contribution.contributionId');
+  }
+
+  const personId = `person:${subject}`;
+  const contributionNodeId = `contribution:${contributionId}`;
+
+  const nodes = [
+    {
+      id: personId,
+      type: 'person',
+      label: subject,
+      metadata: {
+        provider: 'github'
+      }
+    },
+    {
+      id: contributionNodeId,
+      type: 'contribution',
+      label: title || contributionId,
+      metadata: {
+        contributionId,
+        type: clean(contribution.type),
+        status: clean(contribution.status),
+        reference: reference || null,
+        rewardId: clean(contribution.rewardId) || null,
+        ledgerReference: clean(contribution.ledgerReference) || null
+      }
+    }
+  ];
+
+  const edges = [
+    {
+      from: personId,
+      to: contributionNodeId,
+      relation: 'CONTRIBUTED_TO',
+      evidenceClass: 'github',
+      verificationStatus: 'referenced'
+    }
+  ];
+
+  const repository = clean(github.repository);
+  const pullRequest = github.pullRequest == null
+    ? null
+    : Number(github.pullRequest);
+  const githubState = clean(github.state).toUpperCase();
+
+  if (repository && Number.isInteger(pullRequest) && pullRequest > 0) {
+    const artifactId = `artifact:github:${digest({
+      repository,
+      pullRequest
+    }).slice(0, 24)}`;
+
+    nodes.push({
+      id: artifactId,
+      type: 'artifact',
+      label: `GitHub PR #${pullRequest}`,
+      metadata: {
+        provider: 'github',
+        repository,
+        pullRequest,
+        state: githubState || null,
+        reference: reference || null
+      }
+    });
+
+    if (github.merged === true && githubState === 'MERGED') {
+      edges.push({
+        from: contributionNodeId,
+        to: artifactId,
+        relation: 'ACCEPTED_AS',
+        evidenceClass: 'github',
+        verificationStatus: 'merged'
+      });
+    }
+  }
+
+  const components = Array.isArray(bounty.rewardComponents)
+    ? bounty.rewardComponents
+    : [];
+
+  const bountyId = clean(bounty.id);
+
+  if (bountyId && components.length > 0) {
+    const bountyNodeId = `bounty:${bountyId}`;
+
+    nodes.push({
+      id: bountyNodeId,
+      type: 'bounty',
+      label: clean(bounty.title) || bountyId,
+      metadata: {
+        status: clean(bounty.status) || null
+      }
+    });
+
+    for (const component of components) {
+      const status = clean(component.status).toLowerCase();
+
+      if (status !== 'paid') continue;
+
+      const asset = clean(component.asset);
+      const txId = clean(component.txId);
+      const sourceReference = clean(component.sourceReference);
+
+      if (!txId) {
+        throw new Error(`paid ${asset || 'reward'} settlement requires txId`);
+      }
+
+      if (!sourceReference) {
+        throw new Error(`paid ${asset || 'reward'} settlement requires sourceReference`);
+      }
+
+      const settlementId = `settlement:${digest({
+        bountyId,
+        asset,
+        txId
+      }).slice(0, 24)}`;
+
+      nodes.push({
+        id: settlementId,
+        type: 'settlement',
+        label: `${asset || 'reward'} settlement`,
+        metadata: {
+          asset: asset || null,
+          amount: clean(component.amount) || null,
+          network: clean(component.network) || null,
+          status: 'paid',
+          txId,
+          sourceReference
+        }
+      });
+
+      edges.push({
+        from: bountyNodeId,
+        to: settlementId,
+        relation: 'SETTLED_AS',
+        evidenceClass: 'blockchain',
+        verificationStatus: 'confirmed'
+      });
+    }
+  }
+
+  return buildEvidenceGraph({
+    subject,
+    nodes,
+    edges
+  });
+}
+
+module.exports.projectContributorEvidence = projectContributorEvidence;

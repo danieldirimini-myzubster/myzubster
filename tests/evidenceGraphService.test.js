@@ -422,3 +422,393 @@ describe('Knowledge Card full integrity path', () => {
     ).toBe(false);
   });
 });
+
+describe('Paid Contributor Evidence Graph', () => {
+  test('represents an accepted GitHub contribution with narrow semantics', () => {
+    const graph = buildEvidenceGraph({
+      subject: 'jdjioe5-cpu',
+      nodes: [
+        {
+          id: 'person:jdjioe5-cpu',
+          type: 'person',
+          label: 'jdjioe5-cpu'
+        },
+        {
+          id: 'contribution:github-pr-9',
+          type: 'contribution',
+          label: 'GitHub PR #9',
+          metadata: {
+            provider: 'github',
+            repository: 'MyZubster-Ecosystem/myzubster-animal-registry',
+            pullRequest: 9
+          }
+        },
+        {
+          id: 'artifact:github-pr-9-merged',
+          type: 'artifact',
+          label: 'Merged GitHub PR #9',
+          metadata: {
+            provider: 'github',
+            state: 'MERGED'
+          }
+        }
+      ],
+      edges: [
+        {
+          from: 'person:jdjioe5-cpu',
+          to: 'contribution:github-pr-9',
+          relation: 'CONTRIBUTED_TO',
+          evidenceClass: 'github',
+          verificationStatus: 'referenced'
+        },
+        {
+          from: 'contribution:github-pr-9',
+          to: 'artifact:github-pr-9-merged',
+          relation: 'ACCEPTED_AS',
+          evidenceClass: 'github',
+          verificationStatus: 'merged'
+        }
+      ]
+    });
+
+    expect(graph.graph.nodes).toHaveLength(3);
+    expect(graph.graph.edges.map(edge => edge.relation))
+      .toEqual(['CONTRIBUTED_TO', 'ACCEPTED_AS']);
+  });
+
+  test('does not allow SETTLED_AS for a merely submitted reward', () => {
+    expect(() => buildEvidenceGraph({
+      subject: 'jdjioe5-cpu',
+      nodes: [
+        {
+          id: 'bounty:example',
+          type: 'bounty',
+          label: 'Contributor bounty'
+        },
+        {
+          id: 'settlement:example',
+          type: 'settlement',
+          label: 'Submitted transaction',
+          metadata: {
+            status: 'submitted',
+            txId: 'example-tx'
+          }
+        }
+      ],
+      edges: [
+        {
+          from: 'bounty:example',
+          to: 'settlement:example',
+          relation: 'SETTLED_AS',
+          evidenceClass: 'blockchain',
+          verificationStatus: 'submitted'
+        }
+      ]
+    })).toThrow(/SETTLED_AS.*confirmed.*paid/i);
+  });
+});
+
+describe('Paid Contributor settlement semantics', () => {
+  test('allows SETTLED_AS only for a confirmed paid settlement', () => {
+    const result = buildEvidenceGraph({
+      subject: 'jdjioe5-cpu',
+      nodes: [
+        {
+          id: 'bounty:animal-registry',
+          type: 'bounty',
+          label: 'Animal Registry contributor bounty'
+        },
+        {
+          id: 'settlement:confirmed-example',
+          type: 'settlement',
+          label: 'Confirmed contributor settlement',
+          metadata: {
+            status: 'paid',
+            txId: 'example-confirmed-tx',
+            sourceReference: 'independent-confirmation'
+          }
+        }
+      ],
+      edges: [
+        {
+          from: 'bounty:animal-registry',
+          to: 'settlement:confirmed-example',
+          relation: 'SETTLED_AS',
+          evidenceClass: 'blockchain',
+          verificationStatus: 'confirmed'
+        }
+      ]
+    });
+
+    expect(result.graph.edges).toHaveLength(1);
+    expect(result.graph.edges[0].relation).toBe('SETTLED_AS');
+    expect(result.graph.edges[0].verificationStatus).toBe('confirmed');
+
+    const settlement = result.graph.nodes.find(
+      node => node.id === 'settlement:confirmed-example'
+    );
+
+    expect(settlement.metadata.status).toBe('paid');
+    expect(settlement.metadata.sourceReference)
+      .toBe('independent-confirmation');
+  });
+});
+
+describe('Contributor Evidence projection', () => {
+  const {
+    projectContributorEvidence
+  } = require('../src/services/evidenceGraphService');
+
+  function fixture(overrides = {}) {
+    return {
+      contribution: {
+        contributionId: 'animal-registry-pr-9',
+        authorId: 'jdjioe5-cpu',
+        type: 'github_pull_request',
+        title: 'Web-based NFC Tag Simulator',
+        reference: 'https://github.com/MyZubster-Ecosystem/myzubster-animal-registry/pull/9',
+        status: 'REWARDED',
+        rewardId: 'reward-pr-9',
+        ledgerReference: 'myz-ledger:reward-pr-9',
+        ...overrides.contribution
+      },
+      github: {
+        repository: 'MyZubster-Ecosystem/myzubster-animal-registry',
+        pullRequest: 9,
+        state: 'MERGED',
+        merged: true,
+        ...overrides.github
+      },
+      bounty: {
+        id: 'animal-registry-pr-9',
+        title: 'Animal Registry PR #9 bounty',
+        status: 'completed',
+        rewardComponents: [
+          {
+            asset: 'XMR',
+            amount: '0.001',
+            status: 'paid',
+            network: 'monero-mainnet',
+            walletAddress: 'test-wallet-address',
+            txId: 'test-confirmed-transaction',
+            sourceReference: 'independent:test-confirmation'
+          }
+        ],
+        ...overrides.bounty
+      }
+    };
+  }
+
+  test('projects accepted GitHub work and independently confirmed paid settlement', () => {
+    const result = projectContributorEvidence(fixture());
+
+    expect(result.graph.subject).toBe('jdjioe5-cpu');
+
+    expect(
+      result.graph.nodes.some(node =>
+        node.type === 'contribution' &&
+        node.metadata.status === 'REWARDED'
+      )
+    ).toBe(true);
+
+    expect(
+      result.graph.edges.some(edge =>
+        edge.relation === 'CONTRIBUTED_TO'
+      )
+    ).toBe(true);
+
+    expect(
+      result.graph.edges.some(edge =>
+        edge.relation === 'ACCEPTED_AS' &&
+        edge.verificationStatus === 'merged'
+      )
+    ).toBe(true);
+
+    expect(
+      result.graph.edges.some(edge =>
+        edge.relation === 'SETTLED_AS' &&
+        edge.verificationStatus === 'confirmed'
+      )
+    ).toBe(true);
+  });
+
+  test('does not project settlement for a submitted reward', () => {
+    const input = fixture();
+
+    input.bounty.rewardComponents[0].status = 'submitted';
+    input.bounty.rewardComponents[0].sourceReference = null;
+
+    const result = projectContributorEvidence(input);
+
+    expect(
+      result.graph.edges.some(edge =>
+        edge.relation === 'SETTLED_AS'
+      )
+    ).toBe(false);
+  });
+
+  test('does not project settlement merely because KnowledgeContribution says REWARDED', () => {
+    const input = fixture();
+
+    input.bounty.rewardComponents = [];
+
+    const result = projectContributorEvidence(input);
+
+    expect(
+      result.graph.edges.some(edge =>
+        edge.relation === 'SETTLED_AS'
+      )
+    ).toBe(false);
+  });
+
+  test('rejects a paid blockchain settlement without independent sourceReference', () => {
+    const input = fixture();
+
+    input.bounty.rewardComponents[0].sourceReference = null;
+
+    expect(() => projectContributorEvidence(input))
+      .toThrow(/paid.*sourceReference|sourceReference.*paid/i);
+  });
+
+  test('does not describe an unmerged GitHub PR as accepted', () => {
+    const input = fixture({
+      github: {
+        state: 'OPEN',
+        merged: false
+      }
+    });
+
+    const result = projectContributorEvidence(input);
+
+    expect(
+      result.graph.edges.some(edge =>
+        edge.relation === 'ACCEPTED_AS'
+      )
+    ).toBe(false);
+  });
+});
+
+describe('Real contributor regression: jdjioe5-cpu Animal Registry', () => {
+  const {
+    projectContributorEvidence
+  } = require('../src/services/evidenceGraphService');
+
+  test('projects merged PR #9 as accepted contribution without inventing settlement', () => {
+    const result = projectContributorEvidence({
+      contribution: {
+        contributionId: 'animal-registry-pr-9',
+        authorId: 'jdjioe5-cpu',
+        type: 'github_pull_request',
+        title: '[FEATURE #4] Web-based NFC Tag Simulator',
+        reference: 'https://github.com/MyZubster-Ecosystem/myzubster-animal-registry/pull/9',
+        status: 'APPROVED'
+      },
+      github: {
+        repository: 'MyZubster-Ecosystem/myzubster-animal-registry',
+        pullRequest: 9,
+        state: 'MERGED',
+        merged: true
+      },
+      bounty: {
+        id: 'animal-registry-pr-9',
+        title: 'Animal Registry PR #9 bounty reconciliation',
+        status: 'payment_pending',
+        rewardComponents: []
+      }
+    });
+
+    expect(result.graph.subject).toBe('jdjioe5-cpu');
+
+    expect(
+      result.graph.edges.some(edge =>
+        edge.relation === 'CONTRIBUTED_TO'
+      )
+    ).toBe(true);
+
+    expect(
+      result.graph.edges.some(edge =>
+        edge.relation === 'ACCEPTED_AS' &&
+        edge.verificationStatus === 'merged'
+      )
+    ).toBe(true);
+
+    expect(
+      result.graph.edges.some(edge =>
+        edge.relation === 'SETTLED_AS'
+      )
+    ).toBe(false);
+
+    const contribution = result.graph.nodes.find(
+      node => node.type === 'contribution'
+    );
+
+    expect(contribution.metadata.status).toBe('APPROVED');
+    expect(contribution.metadata.rewardId).toBeNull();
+    expect(contribution.metadata.ledgerReference).toBeNull();
+  });
+});
+
+describe('SETTLED_AS global integrity hardening', () => {
+  test('rejects paid settlement without independent sourceReference', () => {
+    expect(() => buildEvidenceGraph({
+      subject: 'contributor',
+      nodes: [
+        {
+          id: 'bounty:test',
+          type: 'bounty',
+          label: 'Test bounty'
+        },
+        {
+          id: 'settlement:test',
+          type: 'settlement',
+          label: 'Test settlement',
+          metadata: {
+            status: 'paid',
+            txId: 'confirmed-tx'
+          }
+        }
+      ],
+      edges: [
+        {
+          from: 'bounty:test',
+          to: 'settlement:test',
+          relation: 'SETTLED_AS',
+          evidenceClass: 'blockchain',
+          verificationStatus: 'confirmed'
+        }
+      ]
+    })).toThrow(/SETTLED_AS.*sourceReference/i);
+  });
+
+  test('rejects SETTLED_AS when source node is not a bounty', () => {
+    expect(() => buildEvidenceGraph({
+      subject: 'contributor',
+      nodes: [
+        {
+          id: 'contribution:test',
+          type: 'contribution',
+          label: 'Test contribution'
+        },
+        {
+          id: 'settlement:test',
+          type: 'settlement',
+          label: 'Test settlement',
+          metadata: {
+            status: 'paid',
+            txId: 'confirmed-tx',
+            sourceReference: 'independent-confirmation'
+          }
+        }
+      ],
+      edges: [
+        {
+          from: 'contribution:test',
+          to: 'settlement:test',
+          relation: 'SETTLED_AS',
+          evidenceClass: 'blockchain',
+          verificationStatus: 'confirmed'
+        }
+      ]
+    })).toThrow(/SETTLED_AS.*bounty/i);
+  });
+});
