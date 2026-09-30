@@ -12,6 +12,13 @@ const GENERAL_SEARCH = [
   { id: 'duckduckgo', name: 'DuckDuckGo', buildUrl: q => `https://duckduckgo.com/?q=${encodeURIComponent(q)}` }
 ];
 
+const {
+  EGRESS,
+  classifyData,
+  evaluateEgress,
+  minimizeForExternalProcessing
+} = require('./zorgaxPrivacyPolicyService');
+
 function clean(value, max = 240) {
   return String(value || '').trim().slice(0, max);
 }
@@ -155,16 +162,37 @@ function searchLinks(query) {
 
 async function sourceComponents(plan, options = {}) {
   const live = options.live !== false;
+  const externalProcessingAllowed = options.externalProcessingAllowed === true;
   const limit = Math.max(1, Math.min(Number(options.limit) || 5, 10));
   const rows = [];
   const providerErrors = [];
+
+  /*
+   * The original build goal is the trust-boundary input.
+   * Derived component queries must not be sent externally when that
+   * originating request is sensitive.
+   */
+  const classification = classifyData({
+    content: plan?.goal
+  });
+
+  const webDecision = evaluateEgress({
+    content: plan?.goal,
+    declaredClassification: classification.classification,
+    destination: EGRESS.WEB_SEARCH,
+    externalProcessingAllowed
+  });
+
+  const externalEgressAllowed = live && webDecision.allowed;
+
   for (const item of plan.components) {
     let liveResults = [];
-    if (live) {
+    if (externalEgressAllowed) {
+      const externalQuery = minimizeForExternalProcessing(item.search_query);
       const providers = [braveSearch, tavilySearch];
       for (const provider of providers) {
         try {
-          const found = await provider(item.search_query, limit);
+          const found = await provider(externalQuery.text, limit);
           liveResults.push(...found);
         } catch (error) {
           providerErrors.push(error.message);
@@ -195,7 +223,13 @@ async function sourceComponents(plan, options = {}) {
     },
     provider_errors: providerErrors,
     components: rows,
-    purchase_performed: false
+    purchase_performed: false,
+    privacy: {
+      classification: classification.classification,
+      processing_mode: classification.processingMode,
+      external_egress_allowed: externalEgressAllowed,
+      web_research_performed: externalEgressAllowed
+    }
   };
 }
 
