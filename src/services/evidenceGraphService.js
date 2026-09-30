@@ -356,3 +356,82 @@ function appendIntegrityChain(graphInput = {}, record = {}) {
 }
 
 module.exports.appendIntegrityChain = appendIntegrityChain;
+
+function attachKnowledgeCard(graphInput = {}, cardInput = {}) {
+  const graph = graphInput.graph || graphInput;
+  const nodes = Array.isArray(graph.nodes) ? [...graph.nodes] : [];
+  const edges = Array.isArray(graph.edges) ? [...graph.edges] : [];
+
+  const cardId = clean(cardInput.id);
+  const title = clean(cardInput.title);
+  const url = clean(cardInput.url);
+
+  if (!cardId) {
+    throw new Error('Knowledge card id is required');
+  }
+
+  if (!title) {
+    throw new Error('Knowledge card title is required');
+  }
+
+  const claimNodes = nodes.filter(node => node.type === 'claim');
+  const evidenceNodes = nodes.filter(node => node.type === 'evidence');
+
+  if (claimNodes.length !== 1) {
+    throw new Error('Knowledge card composition requires exactly one claim node');
+  }
+
+  if (evidenceNodes.length !== 1) {
+    throw new Error('Knowledge card composition requires exactly one evidence node');
+  }
+
+  const claimNode = claimNodes[0];
+  const evidenceNode = evidenceNodes[0];
+  const knowledgeCardNodeId = `knowledge-card:${cardId}`;
+
+  if (nodes.some(node => node.id === knowledgeCardNodeId)) {
+    throw new Error('Knowledge card node already exists');
+  }
+
+  nodes.push(createNode({
+    id: knowledgeCardNodeId,
+    type: 'knowledge-card',
+    label: title,
+    metadata: {
+      cardId,
+      url: url || null
+    }
+  }));
+
+  /*
+   * DESCRIBED_BY means the claim is represented/described by this
+   * referenced Knowledge Card. It does not independently verify the claim.
+   */
+  edges.push(createEdge({
+    from: claimNode.id,
+    to: knowledgeCardNodeId,
+    relation: 'DESCRIBED_BY',
+    evidenceClass: 'knowledge-card',
+    verificationStatus: 'referenced'
+  }));
+
+  /*
+   * The card references the already-existing evidence record.
+   * This composition does not alter the evidence payload or evidenceHash.
+   */
+  edges.push(createEdge({
+    from: knowledgeCardNodeId,
+    to: evidenceNode.id,
+    relation: 'SUPPORTED_BY',
+    evidenceClass: 'evidence',
+    verificationStatus: 'referenced'
+  }));
+
+  return buildEvidenceGraph({
+    subject: graph.subject,
+    nodes,
+    edges
+  });
+}
+
+module.exports.attachKnowledgeCard = attachKnowledgeCard;

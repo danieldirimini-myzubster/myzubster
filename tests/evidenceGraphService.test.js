@@ -269,3 +269,156 @@ describe('Evidence Graph integrity hardening', () => {
       .toThrow(/evidence hash does not match canonical payload/);
   });
 });
+
+describe('Knowledge Card -> Evidence Graph composition', () => {
+  test('links an explicit knowledge card between claim and evidence without changing evidence hash', async () => {
+    const { createKnowledgeEvidence } = require('../src/services/knowledgeEvidenceService');
+    const {
+      projectKnowledgeEvidence,
+      attachKnowledgeCard
+    } = require('../src/services/evidenceGraphService');
+
+    const record = await createKnowledgeEvidence({
+      subject: 'N4K48',
+      domain: 'software-development',
+      claim: 'Contributed improvements to a knowledge ingestion workflow',
+      evidenceLevel: 'artifact-backed'
+    });
+
+    const originalHash = record.evidenceHash;
+    const projected = projectKnowledgeEvidence(record);
+
+    const result = attachKnowledgeCard(projected, {
+      id: '6abaaefb3a7460c4574a45fd',
+      title: 'Docker and AI project evidence',
+      url: 'https://www.myzubster.com/knowledge-card?id=6abaaefb3a7460c4574a45fd'
+    });
+
+    expect(record.evidenceHash).toBe(originalHash);
+
+    const card = result.graph.nodes.find(node => node.type === 'knowledge-card');
+    const claim = result.graph.nodes.find(node => node.type === 'claim');
+    const evidence = result.graph.nodes.find(node => node.type === 'evidence');
+
+    expect(card).toBeTruthy();
+    expect(card.id).toBe('knowledge-card:6abaaefb3a7460c4574a45fd');
+    expect(card.metadata.url).toBe(
+      'https://www.myzubster.com/knowledge-card?id=6abaaefb3a7460c4574a45fd'
+    );
+
+    expect(result.graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: claim.id,
+          to: card.id,
+          relation: 'DESCRIBED_BY',
+          verificationStatus: 'referenced'
+        }),
+        expect.objectContaining({
+          from: card.id,
+          to: evidence.id,
+          relation: 'SUPPORTED_BY',
+          verificationStatus: 'referenced'
+        })
+      ])
+    );
+  });
+
+  test('rejects an incomplete knowledge card reference', async () => {
+    const { createKnowledgeEvidence } = require('../src/services/knowledgeEvidenceService');
+    const {
+      projectKnowledgeEvidence,
+      attachKnowledgeCard
+    } = require('../src/services/evidenceGraphService');
+
+    const record = await createKnowledgeEvidence({
+      subject: 'N4K48',
+      domain: 'software-development',
+      claim: 'Example claim'
+    });
+
+    const projected = projectKnowledgeEvidence(record);
+
+    expect(() => attachKnowledgeCard(projected, {
+      title: 'Missing stable card id'
+    })).toThrow(/knowledge card id/i);
+  });
+});
+
+describe('Knowledge Card full integrity path', () => {
+  test('composes card and canonical integrity chain deterministically', async () => {
+    const { createKnowledgeEvidence } = require('../src/services/knowledgeEvidenceService');
+    const {
+      projectKnowledgeEvidence,
+      attachKnowledgeCard,
+      appendIntegrityChain
+    } = require('../src/services/evidenceGraphService');
+
+    const record = await createKnowledgeEvidence({
+      subject: 'N4K48',
+      domain: 'software-development',
+      claim: 'Contributed improvements to a knowledge ingestion workflow',
+      evidenceLevel: 'artifact-backed'
+    });
+
+    const card = {
+      id: '6abaaefb3a7460c4574a45fd',
+      title: 'Docker and AI project evidence',
+      url: 'https://www.myzubster.com/knowledge-card?id=6abaaefb3a7460c4574a45fd'
+    };
+
+    const build = () => {
+      const projected = projectKnowledgeEvidence(record);
+      const withCard = attachKnowledgeCard(projected, card);
+      return appendIntegrityChain(withCard, record);
+    };
+
+    const first = build();
+    const second = build();
+
+    expect(second.graphHash).toBe(first.graphHash);
+
+    const claim = first.graph.nodes.find(node => node.type === 'claim');
+    const knowledgeCard = first.graph.nodes.find(node => node.type === 'knowledge-card');
+    const evidence = first.graph.nodes.find(node => node.type === 'evidence');
+    const canonicalPayload = first.graph.nodes.find(node => node.type === 'canonical-payload');
+    const digest = first.graph.nodes.find(node => node.type === 'digest');
+
+    expect(claim).toBeTruthy();
+    expect(knowledgeCard).toBeTruthy();
+    expect(evidence).toBeTruthy();
+    expect(canonicalPayload).toBeTruthy();
+    expect(digest).toBeTruthy();
+
+    expect(first.graph.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        from: claim.id,
+        to: knowledgeCard.id,
+        relation: 'DESCRIBED_BY'
+      }),
+      expect.objectContaining({
+        from: knowledgeCard.id,
+        to: evidence.id,
+        relation: 'SUPPORTED_BY'
+      }),
+      expect.objectContaining({
+        from: evidence.id,
+        to: canonicalPayload.id,
+        relation: 'CANONICALIZED_AS'
+      }),
+      expect.objectContaining({
+        from: canonicalPayload.id,
+        to: digest.id,
+        relation: 'HASHED_AS'
+      })
+    ]));
+
+    expect(
+      first.graph.nodes.some(node => node.type === 'attestation')
+    ).toBe(false);
+
+    expect(
+      first.graph.edges.some(edge => edge.relation === 'ATTESTED_BY')
+    ).toBe(false);
+  });
+});
