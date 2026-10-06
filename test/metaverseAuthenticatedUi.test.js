@@ -3,14 +3,20 @@ const path = require('path');
 
 describe('authenticated metaverse UI wiring', () => {
   const apiSource = fs.readFileSync(path.join(__dirname, '../frontend/src/api/metaverse.js'), 'utf8');
+  const authenticatedFetchSource = fs.readFileSync(path.join(__dirname, '../frontend/src/api/authenticatedFetch.js'), 'utf8');
+  const authSessionsSource = fs.readFileSync(path.join(__dirname, '../frontend/src/api/authSessions.js'), 'utf8');
+  const authExpiryRedirectSource = fs.readFileSync(path.join(__dirname, '../frontend/src/auth/authExpiryRedirect.js'), 'utf8');
   const pageSource = fs.readFileSync(path.join(__dirname, '../frontend/src/pages/MetaversePage.js'), 'utf8');
   const roomPageSource = fs.readFileSync(path.join(__dirname, '../frontend/src/pages/MetaverseRoomPage.js'), 'utf8');
   const roomCreateSource = fs.readFileSync(path.join(__dirname, '../frontend/src/pages/MetaverseRoomCreatePage.js'), 'utf8');
 
-  test('sends the MyZubster bearer token only when it exists', () => {
-    expect(apiSource).toContain("localStorage.getItem('myzubster-token')");
-    expect(apiSource).toContain('Authorization: `Bearer ${token}`');
-    expect(apiSource).toContain('headers: authHeaders()');
+  test('uses the centralized same-origin authenticated client', () => {
+    expect(apiSource).toContain("import { authenticatedFetch } from './authenticatedFetch'");
+    expect(apiSource).toContain('const response = await authenticatedFetch');
+    expect(authenticatedFetchSource).toContain('const token = storedToken()');
+    expect(authenticatedFetchSource).toContain("headers.set('Authorization', `Bearer ${token}`)");
+    expect(authenticatedFetchSource).toContain("credentials: 'same-origin'");
+    expect(authSessionsSource).toContain("const TOKEN_KEYS = ['myzubster-token', 'token', 'accessToken']");
   });
 
   test('replaces a stale guest profile with the canonical server character', () => {
@@ -20,10 +26,13 @@ describe('authenticated metaverse UI wiring', () => {
     expect(pageSource).toContain("localStorage.setItem(STORAGE_KEY, JSON.stringify(joinedProfile))");
   });
 
-  test('clears an expired authenticated session and presents a fresh login path', () => {
+  test('clears an expired authenticated session and redirects through the shared expiry flow', () => {
     expect(pageSource).toContain('if (profileError.status === 401)');
-    expect(pageSource).toContain("localStorage.removeItem('myzubster-token')");
-    expect(pageSource).toContain('setAuthenticated(false)');
+    expect(pageSource).toContain('bindAuthExpiryRedirect()');
+    expect(authenticatedFetchSource).toContain('clearBrowserAuth()');
+    expect(authenticatedFetchSource).toContain('notifyAuthenticationExpired(error)');
+    expect(authSessionsSource).toContain('for (const key of TOKEN_KEYS) localStorage.removeItem(key)');
+    expect(authExpiryRedirectSource).toContain("/social-login?returnTo=${encodeURIComponent(safeReturnPath(locationLike))}");
     expect(pageSource).toContain('Sessione scaduta. Accedi di nuovo');
   });
 
