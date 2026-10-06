@@ -1,5 +1,7 @@
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const VirtualSession = require('../models/VirtualSession');
+const CommunityMembership = require('../models/CommunityMembership');
 const {
   mintSocketToken,
   verifySocketToken,
@@ -10,12 +12,19 @@ const {
 jest.mock('../models/VirtualSession', () => ({
   findOne: jest.fn()
 }));
+jest.mock('../models/CommunityMembership', () => ({
+  findOne: jest.fn()
+}));
 
 describe('realtimeGateway', () => {
   beforeEach(() => {
     process.env.JWT_SECRET = 'test-secret';
     delete process.env.REALTIME_TOKEN_SECRET;
     jest.clearAllMocks();
+    Object.defineProperty(mongoose.connection, 'readyState', {
+      configurable: true,
+      value: 0
+    });
   });
 
   test('mints and verifies a bounded realtime token', () => {
@@ -48,6 +57,31 @@ describe('realtimeGateway', () => {
   });
 
   test('community channels fail closed without membership authority', async () => {
+    await expect(authorizeChannel({ channel: 'community:c1', userId: 'u1', role: 'user' })).resolves.toEqual({ allowed: false, reason: 'community_membership_authority_unavailable' });
+    expect(CommunityMembership.findOne).not.toHaveBeenCalled();
+  });
+
+  test('community channels authorize only active persisted members', async () => {
+    Object.defineProperty(mongoose.connection, 'readyState', {
+      configurable: true,
+      value: 1
+    });
+    CommunityMembership.findOne.mockReturnValue({
+      lean: jest.fn().mockResolvedValue({ communityId: 'c1', userId: 'u1', status: 'active' })
+    });
+
+    await expect(authorizeChannel({ channel: 'community:c1', userId: 'u1', role: 'user' })).resolves.toEqual({ allowed: true, channel: 'community:c1' });
+  });
+
+  test('community channels fail closed when the membership query errors', async () => {
+    Object.defineProperty(mongoose.connection, 'readyState', {
+      configurable: true,
+      value: 1
+    });
+    CommunityMembership.findOne.mockReturnValue({
+      lean: jest.fn().mockRejectedValue(new Error('membership database unavailable'))
+    });
+
     await expect(authorizeChannel({ channel: 'community:c1', userId: 'u1', role: 'user' })).resolves.toEqual({ allowed: false, reason: 'community_membership_authority_unavailable' });
   });
 
