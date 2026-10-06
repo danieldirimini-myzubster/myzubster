@@ -20,6 +20,11 @@ const mockPresenceFindOne = jest.fn(() => ({
 }));
 
 jest.mock('mongoose', () => ({
+  Schema: Object.assign(
+    function Schema() { return { index: jest.fn() }; },
+    { Types: { ObjectId: function ObjectId() {} } }
+  ),
+  model: jest.fn(() => ({})),
   connection: {
     readyState: 1,
     db: { admin: () => ({ ping: mockMongoPing }) }
