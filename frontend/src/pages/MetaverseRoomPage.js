@@ -116,7 +116,7 @@ function MetaverseRoomPage({ roomKey }) {
         setStatus('error');
       });
     return () => { active = false; };
-  }, [roomKey]);
+  }, [roomKey, authenticated]);
 
   useEffect(() => {
     if (status !== 'ready') return undefined;
