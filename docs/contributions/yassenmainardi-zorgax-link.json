@@ -1,0 +1,51 @@
+{
+  "schema": "myzubster.contributor-zorgax-profile-link.v1",
+  "contributor": {
+    "github": "yassenmainardi"
+  },
+  "source": {
+    "repository": "https://github.com/yassenmainardi/personaggio-yassen",
+    "file": "PROFILE.md",
+    "commit": "75df9969ba8ef233a64dc0e77c0a995a797779c4"
+  },
+  "professionalPath": {
+    "declaredTarget": "aspiring MyZubster tester",
+    "declaredInterests": [
+      "functionality testing",
+      "problem identification and description",
+      "user-experience verification",
+      "product-improvement feedback"
+    ],
+    "evidenceState": "SELF_DECLARED"
+  },
+  "zorgax": {
+    "status": "DRAFT",
+    "authorizedUse": [
+      "prepare a MyZubster work/profile draft from public repository information",
+      "support a bounded professional-profile / tester onboarding flow"
+    ]
+  },
+  "publication": {
+    "status": "REQUIRES_OWNER_APPROVAL",
+    "ownerApprovalRecorded": false
+  },
+  "separateConsentRequired": [
+    "Contributor Passport",
+    "LIFE Contributor Path",
+    "DAO role or voting rights",
+    "third-party publication or distribution",
+    "employment or contractor status",
+    "professional certification"
+  ],
+  "plannedCheckpoint": {
+    "branch": "yassen/profile-zorgax",
+    "pullRequest": null,
+    "mergeCommit": null,
+    "zorgaxTest": "PENDING"
+  },
+  "boundaries": [
+    "This draft records self-declared interests and does not establish verified competence.",
+    "No publication or third-party distribution is authorized by this draft.",
+    "No Passport, LIFE, DAO, employment, payment, or certification state is inferred."
+  ]
+}
