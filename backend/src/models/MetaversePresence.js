@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const metaversePresenceSchema = new mongoose.Schema({
   sessionId: { type: String, required: true, unique: true, index: true, trim: true },
+  sessionTokenHash: { type: String, required: true, trim: true },
   worldId: { type: String, required: true, default: 'neon-plaza', index: true },
   displayName: { type: String, required: true, trim: true, maxlength: 30 },
   characterName: { type: String, required: true, trim: true, maxlength: 30 },
