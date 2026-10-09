@@ -208,6 +208,7 @@ function MetaversePage() {
   const [authenticated, setAuthenticated] = useState(() => Boolean(localStorage.getItem('myzubster-token')));
   const [profile, setProfile] = useState(initialProfile);
   const [sessionId, setSessionId] = useState(null);
+  const [sessionToken, setSessionToken] = useState(null);
   const [players, setPlayers] = useState({});
   const [messages, setMessages] = useState([]);
   const [chatText, setChatText] = useState('');
@@ -310,6 +311,7 @@ function MetaversePage() {
         : savedMissionProgress(joinedProfile.characterName);
       setVisitedLandmarks(sanitizeVisitedLandmarks(restoredProgress));
       setSessionId(result.sessionId);
+      setSessionToken(result.sessionToken);
       setPlayers(Object.fromEntries(result.players.map((player) => [player.id, player])));
       if (Number.isInteger(result.totalCharacters)) setTotalCharacters(result.totalCharacters);
       trackConversionOnce('mission_started', conversionContext({ surface: 'neon_plaza', mission: 'visit_first_portal', mode: authenticated ? 'account' : 'guest' }));
@@ -333,7 +335,7 @@ function MetaversePage() {
   }, [profile?.characterName, visitedLandmarks]);
 
   useEffect(() => {
-    if (!sessionId) return undefined;
+    if (!sessionId || !sessionToken) return undefined;
 
     let active = true;
     let cursor = null;
@@ -357,7 +359,7 @@ function MetaversePage() {
 
     const runSync = async () => {
       try {
-        const result = await syncMetaverse(sessionId, cursor);
+        const result = await syncMetaverse(sessionId, sessionToken, cursor);
         if (!active) return;
         cursor = result.cursor || cursor;
         setPlayers(Object.fromEntries(result.players.map((player) => [player.id, player])));
@@ -376,6 +378,7 @@ function MetaversePage() {
             const result = await joinMetaverse(profile);
             if (!active) return;
             setSessionId(result.sessionId);
+            setSessionToken(result.sessionToken);
             setPlayers(Object.fromEntries(result.players.map((player) => [player.id, player])));
             setStatus('online');
             return;
@@ -391,10 +394,10 @@ function MetaversePage() {
       active = false;
       if (timer) window.clearTimeout(timer);
     };
-  }, [profile, sessionId]);
+  }, [profile, sessionId, sessionToken]);
 
   const moveBy = (dx, dy) => {
-    if (!sessionId) return;
+    if (!sessionId || !sessionToken) return;
 
     let target = null;
     setPlayers((current) => {
@@ -406,11 +409,11 @@ function MetaversePage() {
       return { ...current, [sessionId]: { ...me, x, y } };
     });
 
-    if (target) moveMetaversePlayer(sessionId, target.x, target.y).catch(() => {});
+    if (target) moveMetaversePlayer(sessionId, sessionToken, target.x, target.y).catch(() => {});
   };
 
   useEffect(() => {
-    if (!sessionId) return undefined;
+    if (!sessionId || !sessionToken) return undefined;
     const keydown = (event) => {
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
@@ -465,24 +468,25 @@ function MetaversePage() {
   const submitChat = async (event) => {
     event.preventDefault();
     const value = chatText.trim();
-    if (!value || !sessionId) return;
+    if (!value || !sessionId || !sessionToken) return;
     setChatText('');
     try {
-      await sendMetaverseChat(sessionId, value);
+      await sendMetaverseChat(sessionId, sessionToken, value);
     } catch (chatError) {
       setError(chatError.message);
     }
   };
 
   const emote = (name) => {
-    if (!sessionId) return;
-    sendMetaverseEmote(sessionId, name).catch(() => {});
+    if (!sessionId || !sessionToken) return;
+    sendMetaverseEmote(sessionId, sessionToken, name).catch(() => {});
   };
 
   const resetProfile = async () => {
-    if (sessionId) await leaveMetaverse(sessionId).catch(() => {});
+    if (sessionId && sessionToken) await leaveMetaverse(sessionId, sessionToken).catch(() => {});
     localStorage.removeItem(STORAGE_KEY);
     setSessionId(null);
+    setSessionToken(null);
     setPlayers({});
     setMessages([]);
     setVisitedLandmarks([]);
@@ -490,7 +494,7 @@ function MetaversePage() {
     setStatus('offline');
   };
 
-  if (!sessionId) {
+  if (!sessionId || !sessionToken) {
     return (
       <AvatarCreator
         initialProfile={profile}
