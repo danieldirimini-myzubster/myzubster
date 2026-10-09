@@ -145,6 +145,9 @@ describe('authenticated MyZubster metaverse identity', () => {
     expect(mockCreate).not.toHaveBeenCalled();
     expect(response.body.identityMode).toBe('account-linked');
     expect(response.body.persistence).toBe('linked-existing');
+    expect(response.body.sessionToken).toEqual(expect.any(String));
+    expect(response.body.player).not.toHaveProperty('sessionToken');
+    expect(response.body.player).not.toHaveProperty('sessionTokenHash');
     expect(response.body.missionProgress).toEqual({ visitedLandmarks: ['identity'] });
     expect(response.body.player).toMatchObject({
       displayName: 'H4x0r',
@@ -160,7 +163,7 @@ describe('authenticated MyZubster metaverse identity', () => {
 
     await request(app)
       .post('/api/metaverse/leave')
-      .send({ sessionId: response.body.sessionId })
+      .send({ sessionId: response.body.sessionId, sessionToken: response.body.sessionToken })
       .expect(200);
   });
 

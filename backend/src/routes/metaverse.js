@@ -29,6 +29,7 @@ const SLOW_REQUEST_THRESHOLD_MS = 1500;
 // Must remain comfortably longer than the browser polling interval so every
 // active client has more than one opportunity to observe the emote.
 const EMOTE_VISIBLE_MS = 5 * 1000;
+const SESSION_TOKEN_BYTES = 32;
 
 const ARCHETYPES = new Set(['guardian', 'explorer', 'maker', 'chronicler', 'scientist']);
 const EMOTES = new Set(['wave', 'spark', 'idea', 'leaf']);
@@ -44,6 +45,17 @@ function cleanText(value, maxLength = 40) {
     .replace(/[<>\u0000-\u001f\u007f]/g, '')
     .trim()
     .slice(0, maxLength);
+}
+
+function sessionTokenHash(value) {
+  return crypto.createHash('sha256').update(String(value || '')).digest('hex');
+}
+
+function validSessionToken(session, candidate) {
+  if (!session?.sessionTokenHash || typeof candidate !== 'string' || !candidate) return false;
+  const expected = Buffer.from(session.sessionTokenHash, 'hex');
+  const actual = Buffer.from(sessionTokenHash(candidate), 'hex');
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 }
 
 function clamp(value, min, max) {
@@ -144,6 +156,21 @@ async function findSession(sessionId) {
   return normalizeSession(presence);
 }
 
+async function requireOwnedSession(req, res, source = req.body) {
+  const sessionId = cleanText(source?.sessionId, 64);
+  const sessionToken = typeof source?.sessionToken === 'string' ? source.sessionToken : '';
+  const session = await findSession(sessionId);
+  if (!session) {
+    res.status(404).json({ success: false, error: 'Unknown metaverse session' });
+    return null;
+  }
+  if (!validSessionToken(session, sessionToken)) {
+    res.status(401).json({ success: false, error: 'Invalid metaverse session credentials' });
+    return null;
+  }
+  return { sessionId, session };
+}
+
 async function persistPresence(value) {
   const session = normalizeSession(value);
   const now = new Date();
@@ -162,6 +189,7 @@ async function persistPresence(value) {
       {
         $set: {
           worldId: WORLD.id,
+          sessionTokenHash: session.sessionTokenHash,
           displayName: session.displayName,
           characterName: session.characterName,
           archetype: session.archetype,
@@ -641,9 +669,11 @@ router.post('/join', optionalAuthenticate, async (req, res) => {
 
   const { x, y } = spawnPoint();
   const id = crypto.randomUUID();
+  const sessionToken = crypto.randomBytes(SESSION_TOKEN_BYTES).toString('base64url');
   const now = new Date();
   const session = {
     id,
+    sessionTokenHash: sessionTokenHash(sessionToken),
     displayName: linkedCharacter ? cleanText(linkedCharacter.displayName, 30) : requestedDisplayName,
     characterName: linkedCharacter ? cleanText(linkedCharacter.characterName, 30) : requestedCharacterName,
     archetype: linkedCharacter && ARCHETYPES.has(linkedCharacter.archetype)
@@ -678,6 +708,7 @@ router.post('/join', optionalAuthenticate, async (req, res) => {
     return res.status(201).json({
       success: true,
       sessionId: id,
+      sessionToken,
       player: publicPlayer(session),
       players,
       world: WORLD,
@@ -703,10 +734,10 @@ router.post('/join', optionalAuthenticate, async (req, res) => {
 });
 
 router.post('/sync', async (req, res) => {
-  const sessionId = cleanText(req.body?.sessionId, 64);
   try {
-    const session = await findSession(sessionId);
-    if (!session) return res.status(404).json({ success: false, error: 'Unknown metaverse session' });
+    const owned = await requireOwnedSession(req, res);
+    if (!owned) return;
+    const { session } = owned;
 
     const now = new Date();
     session.lastSeenAt = now.toISOString();
@@ -737,14 +768,17 @@ router.post('/sync', async (req, res) => {
 // Kept for older clients. Current web clients use /sync because long-lived SSE
 // streams are not reliable across stateless serverless instances.
 router.get('/events', async (req, res) => {
-  const sessionId = cleanText(req.query.sessionId, 64);
-  let session;
+  let owned;
   try {
-    session = await findSession(sessionId);
+    owned = await requireOwnedSession(req, res, {
+      sessionId: req.query.sessionId,
+      sessionToken: req.get('x-metaverse-session-token')
+    });
   } catch (_error) {
     return res.status(503).json({ success: false, error: 'Metaverse presence is temporarily unavailable' });
   }
-  if (!session) return res.status(404).json({ success: false, error: 'Unknown metaverse session' });
+  if (!owned) return;
+  const { sessionId } = owned;
 
   cancelCleanup(sessionId);
   const previous = streams.get(sessionId);
@@ -784,10 +818,10 @@ router.get('/events', async (req, res) => {
 });
 
 router.post('/move', async (req, res) => {
-  const sessionId = cleanText(req.body?.sessionId, 64);
   try {
-    const session = await findSession(sessionId);
-    if (!session) return res.status(404).json({ success: false, error: 'Unknown metaverse session' });
+    const owned = await requireOwnedSession(req, res);
+    if (!owned) return;
+    const { sessionId, session } = owned;
     if (!allowAction(sessionId, 'move', 45)) return res.status(429).json({ success: false, error: 'Move rate exceeded' });
 
     session.x = clamp(req.body?.x, WORLD.minX, WORLD.maxX);
@@ -805,10 +839,10 @@ router.post('/move', async (req, res) => {
 });
 
 router.post('/chat', async (req, res) => {
-  const sessionId = cleanText(req.body?.sessionId, 64);
   try {
-    const session = await findSession(sessionId);
-    if (!session) return res.status(404).json({ success: false, error: 'Unknown metaverse session' });
+    const owned = await requireOwnedSession(req, res);
+    if (!owned) return;
+    const { sessionId, session } = owned;
     if (!allowAction(sessionId, 'chat', 700)) return res.status(429).json({ success: false, error: 'Chat rate exceeded' });
 
     const text = cleanText(req.body?.text, 280);
@@ -833,10 +867,10 @@ router.post('/chat', async (req, res) => {
 });
 
 router.post('/emote', async (req, res) => {
-  const sessionId = cleanText(req.body?.sessionId, 64);
   try {
-    const session = await findSession(sessionId);
-    if (!session) return res.status(404).json({ success: false, error: 'Unknown metaverse session' });
+    const owned = await requireOwnedSession(req, res);
+    if (!owned) return;
+    const { sessionId, session } = owned;
     if (!allowAction(sessionId, 'emote', 500)) return res.status(429).json({ success: false, error: 'Emote rate exceeded' });
 
     const emote = cleanText(req.body?.emote, 16).toLowerCase();
@@ -857,8 +891,10 @@ router.post('/emote', async (req, res) => {
 });
 
 router.post('/leave', async (req, res) => {
-  const sessionId = cleanText(req.body?.sessionId, 64);
   try {
+    const owned = await requireOwnedSession(req, res);
+    if (!owned) return;
+    const { sessionId } = owned;
     await removeSession(sessionId);
     return res.json({ success: true });
   } catch (error) {
