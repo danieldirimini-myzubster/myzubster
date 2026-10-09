@@ -256,37 +256,37 @@ export function getMetaverseWorld() {
   return jsonRequest('/api/metaverse/world');
 }
 
-export function syncMetaverse(sessionId, cursor = null) {
+export function syncMetaverse(sessionId, sessionToken, cursor = null) {
   return jsonRequest('/api/metaverse/sync', {
     method: 'POST',
-    body: JSON.stringify({ sessionId, cursor })
+    body: JSON.stringify({ sessionId, sessionToken, cursor })
   });
 }
 
-export function moveMetaversePlayer(sessionId, x, y) {
+export function moveMetaversePlayer(sessionId, sessionToken, x, y) {
   return jsonRequest('/api/metaverse/move', {
     method: 'POST',
-    body: JSON.stringify({ sessionId, x, y })
+    body: JSON.stringify({ sessionId, sessionToken, x, y })
   });
 }
 
-export function sendMetaverseChat(sessionId, text) {
+export function sendMetaverseChat(sessionId, sessionToken, text) {
   return jsonRequest('/api/metaverse/chat', {
     method: 'POST',
-    body: JSON.stringify({ sessionId, text })
+    body: JSON.stringify({ sessionId, sessionToken, text })
   });
 }
 
-export function sendMetaverseEmote(sessionId, emote) {
+export function sendMetaverseEmote(sessionId, sessionToken, emote) {
   return jsonRequest('/api/metaverse/emote', {
     method: 'POST',
-    body: JSON.stringify({ sessionId, emote })
+    body: JSON.stringify({ sessionId, sessionToken, emote })
   });
 }
 
-export function leaveMetaverse(sessionId) {
+export function leaveMetaverse(sessionId, sessionToken) {
   return jsonRequest('/api/metaverse/leave', {
     method: 'POST',
-    body: JSON.stringify({ sessionId })
+    body: JSON.stringify({ sessionId, sessionToken })
   });
 }
