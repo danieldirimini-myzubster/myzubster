@@ -92,7 +92,7 @@ describe('Zorgax privacy audit service', () => {
     expect(stored).not.toContain('"history"');
 
     const mode = fs.statSync(auditPath).mode & 0o777;
-    expect(mode).toBe(0o600);
+    if (process.platform !== 'win32') expect(mode).toBe(0o600);
   });
 
   test('appends rather than overwriting previous decisions', () => {

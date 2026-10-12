@@ -124,7 +124,7 @@ describe('Zorgax enterprise privacy runtime enforcement', () => {
     expect(storedAudit).not.toContain('"history"');
 
     const auditMode = fs.statSync(auditPath).mode & 0o777;
-    expect(auditMode).toBe(0o600);
+    if (process.platform !== 'win32') expect(auditMode).toBe(0o600);
   });
 
   test('history PII also forces the whole request to LOCAL_ONLY', async () => {

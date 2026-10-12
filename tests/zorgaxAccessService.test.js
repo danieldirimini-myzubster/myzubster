@@ -7,37 +7,30 @@ const {
   meetsPlan
 } = require('../src/services/zorgaxAccessService');
 
-const noSponsor = jest.fn().mockResolvedValue(null);
-
 describe('Zorgax unified access service', () => {
-  test('selects a legacy subscription when it outranks the entitlement', async () => {
+  test('selects a paid entitlement when it outranks sponsored Free access', async () => {
     const access = await getAccess('user-1', {
-      subscriptionAccessFn: jest.fn().mockResolvedValue({
-        plan: 'pro',
-        status: 'ACTIVE',
-        expiresAt: new Date('2026-10-01T00:00:00Z')
-      }),
       entitlementAccessFn: jest.fn().mockResolvedValue({
-        tier: 'FREE',
+        tier: 'PRO',
         active: true,
-        source: 'DEFAULT_FREE'
+        source: 'PURCHASE',
+        endsAt: new Date('2026-10-01T00:00:00Z')
       }),
-      sponsoredAccessFn: noSponsor
+      sponsoredAccessFn: jest.fn().mockResolvedValue({ tier: 'FREE', active: true })
     });
 
     expect(access).toMatchObject({
       ownerId: 'user-1',
       plan: 'pro',
       tier: 'PRO',
-      source: 'SUBSCRIPTION'
+      source: 'ENTITLEMENT'
     });
   });
 
-  test('selects a Developer entitlement over a Pro subscription', async () => {
+  test('selects a Developer entitlement over sponsored Pro access', async () => {
     const access = await getAccess('user-1', {
-      subscriptionAccessFn: jest.fn().mockResolvedValue({ plan: 'pro', status: 'ACTIVE' }),
       entitlementAccessFn: jest.fn().mockResolvedValue({ tier: 'DEVELOPER', active: true }),
-      sponsoredAccessFn: noSponsor
+      sponsoredAccessFn: jest.fn().mockResolvedValue({ tier: 'PRO', active: true })
     });
 
     expect(access.plan).toBe('developer');
@@ -47,7 +40,6 @@ describe('Zorgax unified access service', () => {
 
   test('selects sponsored Developer pilot access without a payment source', async () => {
     const access = await getAccess('user-1', {
-      subscriptionAccessFn: jest.fn().mockResolvedValue({ plan: 'free', status: 'ACTIVE' }),
       entitlementAccessFn: jest.fn().mockResolvedValue({ tier: 'FREE', active: true }),
       sponsoredAccessFn: jest.fn().mockResolvedValue({
         tier: 'DEVELOPER',
@@ -67,23 +59,21 @@ describe('Zorgax unified access service', () => {
     expect(meetsPlan(access, 'developer')).toBe(true);
   });
 
-  test('keeps a verified paid source when the other access store is unavailable', async () => {
+  test('keeps a paid entitlement when the sponsored-access store is unavailable', async () => {
     const access = await getAccess('user-1', {
-      subscriptionAccessFn: jest.fn().mockResolvedValue({ plan: 'pro', status: 'ACTIVE' }),
-      entitlementAccessFn: jest.fn().mockRejectedValue(new Error('entitlement store unavailable')),
-      sponsoredAccessFn: noSponsor
+      entitlementAccessFn: jest.fn().mockResolvedValue({ tier: 'PRO', active: true }),
+      sponsoredAccessFn: jest.fn().mockRejectedValue(new Error('sponsor store unavailable'))
     });
 
     expect(access.plan).toBe('pro');
-    expect(access.sourcesChecked).toEqual(['SUBSCRIPTION']);
+    expect(access.sourcesChecked).toEqual(['ENTITLEMENT']);
   });
 
   test('fails closed when no access source can be checked', async () => {
     await expect(getAccess('user-1', {
-      subscriptionAccessFn: jest.fn().mockRejectedValue(new Error('subscription store unavailable')),
       entitlementAccessFn: jest.fn().mockRejectedValue(new Error('entitlement store unavailable')),
       sponsoredAccessFn: jest.fn().mockRejectedValue(new Error('sponsor store unavailable'))
-    })).rejects.toThrow('subscription store unavailable');
+    })).rejects.toThrow('entitlement store unavailable');
   });
 
   test('applies guest, Free, Pro and Developer feature limits', () => {
