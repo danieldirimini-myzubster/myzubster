@@ -77,8 +77,8 @@ describe('ZORGAX Party Mode API', () => {
       })
       .expect(200);
 
-    expect(response.body.status).toBe('unknown');
-    expect(response.body.answer).toContain('not verified as live');
+    expect(response.body.status).toBe('unavailable');
+    expect(response.body.answer).toContain("don't have authorized live-session information");
   });
 
   test('exposes degraded telemetry without storage and does not invent WebXR surfaces', async () => {
