@@ -3,20 +3,16 @@ const path = require('path');
 
 describe('authenticated metaverse UI wiring', () => {
   const apiSource = fs.readFileSync(path.join(__dirname, '../frontend/src/api/metaverse.js'), 'utf8');
-  const authenticatedFetchSource = fs.readFileSync(path.join(__dirname, '../frontend/src/api/authenticatedFetch.js'), 'utf8');
-  const authSessionsSource = fs.readFileSync(path.join(__dirname, '../frontend/src/api/authSessions.js'), 'utf8');
-  const authExpiryRedirectSource = fs.readFileSync(path.join(__dirname, '../frontend/src/auth/authExpiryRedirect.js'), 'utf8');
   const pageSource = fs.readFileSync(path.join(__dirname, '../frontend/src/pages/MetaversePage.js'), 'utf8');
   const roomPageSource = fs.readFileSync(path.join(__dirname, '../frontend/src/pages/MetaverseRoomPage.js'), 'utf8');
   const roomCreateSource = fs.readFileSync(path.join(__dirname, '../frontend/src/pages/MetaverseRoomCreatePage.js'), 'utf8');
 
-  test('uses the centralized same-origin authenticated client', () => {
-    expect(apiSource).toContain("import { authenticatedFetch } from './authenticatedFetch'");
-    expect(apiSource).toContain('const response = await authenticatedFetch');
-    expect(authenticatedFetchSource).toContain('const token = storedToken()');
-    expect(authenticatedFetchSource).toContain("headers.set('Authorization', `Bearer ${token}`)");
-    expect(authenticatedFetchSource).toContain("credentials: 'same-origin'");
-    expect(authSessionsSource).toContain("const TOKEN_KEYS = ['myzubster-token', 'token', 'accessToken']");
+  test('uses the same-origin API and adds the account bearer token only when present', () => {
+    expect(apiSource).toContain("const API_URL = ''");
+    expect(apiSource).toContain("localStorage.getItem('myzubster-token')");
+    expect(apiSource).toContain('Authorization: `Bearer ${token}`');
+    expect(apiSource).toContain('fetch(`${API_URL}${path}`');
+    expect(apiSource).not.toContain('process.env.REACT_APP_API_URL');
   });
 
   test('replaces a stale guest profile with the canonical server character', () => {
@@ -26,14 +22,14 @@ describe('authenticated metaverse UI wiring', () => {
     expect(pageSource).toContain("localStorage.setItem(STORAGE_KEY, JSON.stringify(joinedProfile))");
   });
 
-  test('clears an expired authenticated session and redirects through the shared expiry flow', () => {
-    expect(pageSource).toContain('if (profileError.status === 401)');
-    expect(pageSource).toContain('bindAuthExpiryRedirect()');
-    expect(authenticatedFetchSource).toContain('clearBrowserAuth()');
-    expect(authenticatedFetchSource).toContain('notifyAuthenticationExpired(error)');
-    expect(authSessionsSource).toContain('for (const key of TOKEN_KEYS) localStorage.removeItem(key)');
-    expect(authExpiryRedirectSource).toContain("/social-login?returnTo=${encodeURIComponent(safeReturnPath(locationLike))}");
-    expect(pageSource).toContain('Sessione scaduta. Accedi di nuovo');
+  test('keeps the private presence token in component state and sends it on every mutation', () => {
+    expect(pageSource).toContain('const [sessionToken, setSessionToken] = useState(null)');
+    expect(pageSource).toContain('setSessionToken(result.sessionToken)');
+    expect(pageSource).toContain('syncMetaverse(sessionId, sessionToken, cursor)');
+    expect(pageSource).toContain('moveMetaversePlayer(sessionId, sessionToken');
+    expect(pageSource).toContain('sendMetaverseChat(sessionId, sessionToken');
+    expect(pageSource).not.toContain("localStorage.setItem('metaverse-session-token'");
+    expect(apiSource).toContain('JSON.stringify({ sessionId, sessionToken, x, y })');
   });
 
   test('renders account-linked characters as verified instead of guests', () => {
@@ -126,7 +122,7 @@ describe('authenticated metaverse UI wiring', () => {
 
   test('uses resilient shared-state sync instead of a serverless EventSource', () => {
     expect(apiSource).toContain("jsonRequest('/api/metaverse/sync'");
-    expect(pageSource).toContain('syncMetaverse(sessionId, cursor)');
+    expect(pageSource).toContain('syncMetaverse(sessionId, sessionToken, cursor)');
     expect(pageSource).toContain("setStatus('online')");
     expect(pageSource).toContain("setStatus('reconnecting')");
     expect(pageSource).not.toContain('createMetaverseEventSource');

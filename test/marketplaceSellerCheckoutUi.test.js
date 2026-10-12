@@ -8,7 +8,8 @@ describe('Marketplace free-first Seller UI', () => {
 
   test('sends the MyZubster bearer token to free Seller activation', () => {
     expect(page).toContain("localStorage.getItem('myzubster-token')");
-    expect(page).toContain('Authorization: `Bearer ${token}`');
+    expect(page).toContain('Authorization:`Bearer ${token}`');
+    expect(page).toContain("headers:authHeaders({'Content-Type':'application/json'})");
     expect(page).toContain("apiAction('/api/marketplace/seller/subscribe',{})");
     expect(page).not.toContain("apiAction('/api/marketplace/seller/checkout',{})");
   });

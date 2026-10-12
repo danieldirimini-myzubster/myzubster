@@ -12,20 +12,19 @@ describe('Zorgax cultural API wiring and privacy boundaries', () => {
   });
 
   test('public event projection excludes private location fields', () => {
-    const projection = controller.slice(controller.indexOf('const publicEventProjection'), controller.indexOf('exports.createEvent'));
-    expect(projection).not.toContain('privateLocation');
-    expect(projection).not.toContain('organizerId');
-    expect(projection).toContain('publicMeetingPoint');
-    expect(projection).toContain('approximateArea');
+    const projection = controller.slice(controller.indexOf('exports.getPublicEvent'), controller.indexOf('exports.getOrganizerEvent'));
+    expect(projection).toContain("select('-location.restrictedText')");
+    expect(projection).toContain("event.location.publicText = ''");
+    expect(projection).not.toContain("select('+location.restrictedText')");
   });
 
   test('organizer reads and writes are ownership scoped', () => {
-    expect(controller).toContain("organizerId: req.user._id");
-    expect(controller).toContain("findOne({ _id: req.params.eventId, organizerId: req.user._id })");
-    expect(controller).toContain("findOneAndUpdate({ _id: req.params.eventId, organizerId: req.user._id }");
+    expect(controller).toContain("ownerId: req.user._id");
+    expect(controller).toContain("findOne({ _id: req.params.eventId, ownerId: req.user._id })");
+    expect(controller).toContain("findOneAndUpdate({ _id: req.params.eventId, ownerId: req.user._id }");
   });
 
   test('artist public endpoints hide account ownership', () => {
-    expect(controller).toContain("select('-claimedByUserId')");
+    expect(controller).toContain("select('-ownerId')");
   });
 });
