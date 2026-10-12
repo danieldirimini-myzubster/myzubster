@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const test = require('node:test');
+const test = process.env.JEST_WORKER_ID ? global.test : require('node:test');
 
 function verificationInput(order, txId) {
   const payment = order.payment || {};
