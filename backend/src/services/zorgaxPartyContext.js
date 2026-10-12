@@ -63,13 +63,10 @@ async function resolveSessionSummary(sessionId) {
   if (!normalizedSessionId) return null;
 
   if (!databaseAvailable()) {
-    return {
-      id: normalizedSessionId,
-      state: 'unknown',
-      live: false,
-      participantCount: null,
-      source: 'unavailable'
-    };
+    // A client-provided session id is not authoritative. When shared storage is
+    // unavailable we cannot prove that the session exists, so do not reflect
+    // the untrusted identifier into the public PartyContext.
+    return null;
   }
 
   const now = new Date();
@@ -163,7 +160,8 @@ function validatePartyContext(context) {
     'privatekey',
     'precisecoordinates',
     'hiddenlocation',
-    'secretlocation'
+    'secretlocation',
+    'sessionid'
   ];
   for (const key of forbiddenKeys) {
     if (serialized.includes(`\"${key}\"`)) errors.push(`forbidden field: ${key}`);
