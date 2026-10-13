@@ -108,6 +108,20 @@ Nicola's independent MyZubster MVP is a **public, interactive pilot** showing ho
 
 > A learning or mentoring interaction does not by itself prove competence, safety, scientific validity or institutional endorsement.
 
+## Contributor knowledge and digital passports
+
+[Open the public Knowledge Graph](https://myzubster-knowledge-myzubster.vercel.app/conoscenze).
+
+1. Choose a small task in [CONTRIBUTING.md](CONTRIBUTING.md) and document the work in an issue, pull request, test or technical source.
+2. Link the original evidence and preserve its author. A submitted contribution still needs review.
+3. Use the [Profile Builder](https://www.myzubster.com/zorgax-profile-builder.html) to prepare a Knowledge Card. Personal identity links and public publication require the contributor's approval.
+4. Explore published cards in the Knowledge Graph to inspect their sources and technical proofs.
+5. Treat a reward as a separate record: accepted work, a promised reward and a completed payment are different states.
+
+**Current passport pilot:** the catalog includes a Contributor Passport summary. Its automatic data connection is still incomplete; this summary must not be presented as a live passport service for every contributor. An unavailable API must not turn historical values into current verified data.
+
+A comment, commit or hash does not automatically certify a skill. Hashes protect the integrity of the referenced content; proof and payment verification have their own explicit status. Wallet addresses, private conversations and unpublished drafts do not belong in the public passport.
+
 ## 🧩 Start contributing in 10 minutes
 
 Want to help without learning the whole ecosystem first? Start with one small, reviewable change.
