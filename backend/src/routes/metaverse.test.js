@@ -114,6 +114,26 @@ describe('MyZubster metaverse API', () => {
     expect(new Date(syncResponse.body.cursor).toString()).not.toBe('Invalid Date');
   });
 
+  test('returns retry guidance when a mutation exceeds its minimum interval', async () => {
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    await request(app)
+      .post('/api/metaverse/chat')
+      .send({ sessionId, sessionToken, text: 'First message after cooldown' })
+      .expect(201);
+
+    const response = await request(app)
+      .post('/api/metaverse/chat')
+      .send({ sessionId, sessionToken, text: 'Immediate duplicate burst' })
+      .expect(429);
+
+    expect(response.headers['retry-after']).toBe('1');
+    expect(response.body).toMatchObject({
+      success: false,
+      error: 'Chat rate exceeded',
+      retryAfterMs: 700
+    });
+  });
+
   test('keeps an emote visible across a browser synchronization interval', async () => {
     await request(app)
       .post('/api/metaverse/emote')
