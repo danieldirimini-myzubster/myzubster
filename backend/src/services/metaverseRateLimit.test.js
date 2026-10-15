@@ -69,6 +69,22 @@ describe('metaverse distributed rate-limit policy', () => {
     expect(reopened).toMatchObject({ allowed: true, remaining: policy.limit - 1 });
   });
 
+  test('fails closed in production when the distributed store is unavailable', async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+
+    try {
+      await expect(claimMetaverseRateLimit({
+        action: 'join',
+        subject: 'network:test',
+        now: new Date('2026-10-13T10:00:20.000Z')
+      })).rejects.toThrow('Metaverse distributed rate-limit store is unavailable');
+    } finally {
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+    }
+  });
+
   test('increments a shared MongoDB bucket atomically', async () => {
     const update = jest.spyOn(MetaverseRateLimitBucket, 'findOneAndUpdate')
       .mockResolvedValue({ count: RATE_LIMIT_POLICIES.chat.limit + 1 });

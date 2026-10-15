@@ -89,9 +89,11 @@ async function claimMetaverseRateLimit({ action, subject, now = new Date() }) {
   if (!policy) throw new Error('Unknown metaverse rate-limit action');
   const key = rateLimitKey(action, subject, now, policy.windowMs);
   const parameters = { key, ...policy, now };
-  return databaseAvailable()
-    ? claimDatabaseBucket(parameters)
-    : claimLocalBucket(parameters);
+  if (databaseAvailable()) return claimDatabaseBucket(parameters);
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Metaverse distributed rate-limit store is unavailable');
+  }
+  return claimLocalBucket(parameters);
 }
 
 function resetLocalRateLimitBuckets() {
