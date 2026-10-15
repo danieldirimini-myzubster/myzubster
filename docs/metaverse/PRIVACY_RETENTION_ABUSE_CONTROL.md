@@ -56,6 +56,10 @@ Logs must not include request bodies, query strings, chat text, authorization he
 - Server-side allowlists for archetypes and emotes.
 - Input sanitization and bounded field lengths.
 - Session-based minimum intervals for movement, chat and emotes.
+- MongoDB-backed fixed-window limits for join, sync, chat and emote mutations.
+- Rate-limit keys are HMAC digests; raw network addresses, account IDs and session IDs are not stored in throttle buckets.
+- Expired throttle buckets are removed by a MongoDB TTL index.
+- Rejected requests return `429`, `Retry-After` and bounded retry metadata.
 - World-capacity enforcement.
 - Authenticated accounts cannot silently fall back to guest identity.
 - Account-linked characters are resolved from the authenticated user record; client identity claims are ignored.
@@ -66,14 +70,16 @@ These controls reduce accidental flooding but are not a complete distributed mod
 
 Before the Metaverse is promoted beyond the current MVP baseline, implement and test:
 
-1. distributed rate limits for join, sync, chat and emote routes;
-2. duplicate-message and burst-spam detection;
-3. mute and block controls enforced in all relevant responses;
-4. a user-report workflow with a bounded reason and no sensitive attachments by default;
-5. authenticated moderator roles, documented actions and minimal audit records;
-6. an appeal and correction path;
-7. account-linked and guest deletion procedures;
-8. an incident-response owner, rollback procedure and evidence checklist.
+1. duplicate-message detection beyond the active burst limits;
+2. mute and block controls enforced in all relevant responses;
+3. a user-report workflow with a bounded reason and no sensitive attachments by default;
+4. authenticated moderator roles, documented actions and minimal audit records;
+5. an appeal and correction path;
+6. account-linked and guest deletion procedures;
+7. an incident-response owner, rollback procedure and evidence checklist.
+
+The distributed limiter uses MongoDB in production. The process-local fallback exists only for isolated tests and degraded ephemeral development; a connected MongoDB failure is treated as a service error rather than silently bypassing the policy.
+Production derives the HMAC key from `METAVERSE_RATE_LIMIT_SECRET`, `REALTIME_TOKEN_SECRET` or `JWT_SECRET` and fails closed when none is configured. Forwarded network addresses are accepted only on Vercel or when `METAVERSE_TRUST_PROXY=1` explicitly marks the deployment proxy as trusted.
 
 Until these controls exist, the project must not claim that automated moderation, distributed abuse prevention or private chat is available.
 

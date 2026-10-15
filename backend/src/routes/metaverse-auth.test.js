@@ -7,6 +7,7 @@ const mockPresenceLean = jest.fn();
 const mockPresenceCountDocuments = jest.fn();
 const mockPresenceHealthLean = jest.fn();
 const mockChatCountDocuments = jest.fn();
+const mockRateLimitFindOneAndUpdate = jest.fn();
 const mockMongoPing = jest.fn();
 const mockPresenceFind = jest.fn(() => ({
   sort() { return this; },
@@ -51,6 +52,10 @@ jest.mock('../models/MetaverseChatMessage', () => ({
   countDocuments: mockChatCountDocuments
 }));
 
+jest.mock('../models/MetaverseRateLimitBucket', () => ({
+  findOneAndUpdate: mockRateLimitFindOneAndUpdate
+}));
+
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const request = require('supertest');
@@ -81,6 +86,7 @@ describe('authenticated MyZubster metaverse identity', () => {
     mockMongoPing.mockResolvedValue({ ok: 1 });
     mockPresenceCountDocuments.mockResolvedValue(2);
     mockChatCountDocuments.mockResolvedValue(4);
+    mockRateLimitFindOneAndUpdate.mockResolvedValue({ count: 1 });
     mockPresenceHealthLean.mockResolvedValue({ lastSeenAt: new Date(Date.now() - 5000) });
   });
 

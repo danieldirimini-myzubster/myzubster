@@ -5,6 +5,7 @@ const MetaverseCharacter = require('../models/MetaverseCharacter');
 const MetaversePresence = require('../models/MetaversePresence');
 const MetaverseChatMessage = require('../models/MetaverseChatMessage');
 const { authenticate, optionalAuthenticate } = require('../../../src/middleware/auth');
+const { claimMetaverseRateLimit } = require('../services/metaverseRateLimit');
 
 const router = express.Router();
 
@@ -285,6 +286,48 @@ function allowAction(sessionId, action, intervalMs) {
   if (now - previous < intervalMs) return false;
   actionTimes.set(key, now);
   return true;
+}
+
+function requestNetworkSubject(req) {
+  const trustForwardedAddress = process.env.VERCEL === '1'
+    || process.env.METAVERSE_TRUST_PROXY === '1';
+  const forwarded = String(trustForwardedAddress
+    ? req.get('x-vercel-forwarded-for') || req.get('x-forwarded-for') || ''
+    : '')
+    .split(',')[0]
+    .trim()
+    .slice(0, 80);
+  const remote = String(req.ip || req.socket?.remoteAddress || 'unknown').slice(0, 80);
+  return `network:${forwarded || remote}`;
+}
+
+function applyRateLimitHeaders(res, decision) {
+  res.setHeader('X-RateLimit-Limit', String(decision.limit));
+  res.setHeader('X-RateLimit-Remaining', String(decision.remaining));
+  if (!decision.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil(decision.retryAfterMs / 1000))));
+  }
+}
+
+async function enforceRateLimit(req, res, action, subject) {
+  const decision = await claimMetaverseRateLimit({ action, subject });
+  applyRateLimitHeaders(res, decision);
+  if (decision.allowed) return true;
+  res.status(429).json({
+    success: false,
+    error: `${action[0].toUpperCase()}${action.slice(1)} rate exceeded`,
+    retryAfterMs: decision.retryAfterMs
+  });
+  return false;
+}
+
+function sendMinimumIntervalExceeded(res, action, retryAfterMs) {
+  res.setHeader('Retry-After', String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
+  return res.status(429).json({
+    success: false,
+    error: `${action[0].toUpperCase()}${action.slice(1)} rate exceeded`,
+    retryAfterMs
+  });
 }
 
 function cancelCleanup(sessionId) {
@@ -625,6 +668,8 @@ router.post('/progress/landmarks', authenticate, async (req, res) => {
 router.post('/join', optionalAuthenticate, async (req, res) => {
   let activeSessions;
   try {
+    const subject = req.userId ? `account:${req.userId}` : requestNetworkSubject(req);
+    if (!(await enforceRateLimit(req, res, 'join', subject))) return;
     activeSessions = await listActiveSessions();
   } catch (error) {
     console.error('Metaverse capacity lookup error:', error);
@@ -737,7 +782,8 @@ router.post('/sync', async (req, res) => {
   try {
     const owned = await requireOwnedSession(req, res);
     if (!owned) return;
-    const { session } = owned;
+    const { sessionId, session } = owned;
+    if (!(await enforceRateLimit(req, res, 'sync', `session:${sessionId}`))) return;
 
     const now = new Date();
     session.lastSeenAt = now.toISOString();
@@ -843,7 +889,8 @@ router.post('/chat', async (req, res) => {
     const owned = await requireOwnedSession(req, res);
     if (!owned) return;
     const { sessionId, session } = owned;
-    if (!allowAction(sessionId, 'chat', 700)) return res.status(429).json({ success: false, error: 'Chat rate exceeded' });
+    if (!(await enforceRateLimit(req, res, 'chat', `session:${sessionId}`))) return;
+    if (!allowAction(sessionId, 'chat', 700)) return sendMinimumIntervalExceeded(res, 'chat', 700);
 
     const text = cleanText(req.body?.text, 280);
     if (!text) return res.status(400).json({ success: false, error: 'Message is empty' });
@@ -871,7 +918,8 @@ router.post('/emote', async (req, res) => {
     const owned = await requireOwnedSession(req, res);
     if (!owned) return;
     const { sessionId, session } = owned;
-    if (!allowAction(sessionId, 'emote', 500)) return res.status(429).json({ success: false, error: 'Emote rate exceeded' });
+    if (!(await enforceRateLimit(req, res, 'emote', `session:${sessionId}`))) return;
+    if (!allowAction(sessionId, 'emote', 500)) return sendMinimumIntervalExceeded(res, 'emote', 500);
 
     const emote = cleanText(req.body?.emote, 16).toLowerCase();
     if (!EMOTES.has(emote)) return res.status(400).json({ success: false, error: 'Unsupported emote' });
