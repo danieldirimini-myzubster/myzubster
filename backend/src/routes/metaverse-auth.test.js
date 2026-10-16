@@ -169,7 +169,8 @@ describe('authenticated MyZubster metaverse identity', () => {
 
     await request(app)
       .post('/api/metaverse/leave')
-      .send({ sessionId: response.body.sessionId, sessionToken: response.body.sessionToken })
+      .set('X-Metaverse-Session-Token', response.body.sessionToken)
+      .send({ sessionId: response.body.sessionId })
       .expect(200);
   });
 

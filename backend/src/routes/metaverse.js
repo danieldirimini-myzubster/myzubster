@@ -159,7 +159,10 @@ async function findSession(sessionId) {
 
 async function requireOwnedSession(req, res, source = req.body) {
   const sessionId = cleanText(source?.sessionId, 64);
-  const sessionToken = typeof source?.sessionToken === 'string' ? source.sessionToken : '';
+  const headerToken = req.get('x-metaverse-session-token');
+  const sessionToken = typeof headerToken === 'string' && headerToken
+    ? headerToken
+    : typeof source?.sessionToken === 'string' ? source.sessionToken : '';
   const session = await findSession(sessionId);
   if (!session) {
     res.status(404).json({ success: false, error: 'Unknown metaverse session' });
