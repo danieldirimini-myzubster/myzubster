@@ -82,6 +82,19 @@ function presenceExpiry(now = new Date()) {
   return new Date(now.getTime() + PRESENCE_TTL_MS);
 }
 
+function sessionExpired(session, now = new Date()) {
+  if (!session?.expiresAt) return true;
+  const expiresAt = new Date(session.expiresAt);
+  return Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= now.getTime();
+}
+
+function sessionLease(session) {
+  return {
+    expiresAt: normalizeSession(session).expiresAt,
+    sessionTtlSeconds: PRESENCE_TTL_MS / 1000
+  };
+}
+
 function normalizeSession(value) {
   if (!value) return null;
   const session = typeof value.toObject === 'function' ? value.toObject() : value;
@@ -126,7 +139,13 @@ function localSnapshot() {
 }
 
 async function listActiveSessions() {
-  if (!databaseAvailable()) return Array.from(sessions.values()).map(normalizeSession);
+  if (!databaseAvailable()) {
+    const now = new Date();
+    for (const [sessionId, session] of sessions.entries()) {
+      if (sessionExpired(session, now)) removeLocalSession(sessionId);
+    }
+    return Array.from(sessions.values()).map(normalizeSession);
+  }
 
   const presences = await MetaversePresence.find({
     worldId: WORLD.id,
@@ -146,7 +165,13 @@ async function sharedSnapshot() {
 
 async function findSession(sessionId) {
   const localSession = sessions.get(sessionId);
-  if (localSession) return normalizeSession(localSession);
+  if (localSession) {
+    if (sessionExpired(localSession)) {
+      removeLocalSession(sessionId);
+      return null;
+    }
+    return normalizeSession(localSession);
+  }
   if (!databaseAvailable()) return null;
 
   const presence = await MetaversePresence.findOne({
@@ -757,6 +782,7 @@ router.post('/join', optionalAuthenticate, async (req, res) => {
       success: true,
       sessionId: id,
       sessionToken,
+      ...sessionLease(session),
       player: publicPlayer(session),
       players,
       world: WORLD,
@@ -801,6 +827,7 @@ router.post('/sync', async (req, res) => {
 
     return res.json({
       success: true,
+      ...sessionLease(session),
       world: WORLD,
       players,
       messages,
@@ -884,6 +911,29 @@ router.post('/move', async (req, res) => {
   } catch (error) {
     console.error('Metaverse move error:', error);
     return res.status(503).json({ success: false, error: 'Metaverse presence is temporarily unavailable' });
+  }
+});
+
+router.post('/session/rotate', async (req, res) => {
+  try {
+    const owned = await requireOwnedSession(req, res);
+    if (!owned) return;
+    const { session } = owned;
+    const nextSessionToken = crypto.randomBytes(SESSION_TOKEN_BYTES).toString('base64url');
+    const now = new Date();
+    session.sessionTokenHash = sessionTokenHash(nextSessionToken);
+    session.lastSeenAt = now.toISOString();
+    session.expiresAt = presenceExpiry(now).toISOString();
+    const persistedSession = await persistPresence(session);
+
+    return res.json({
+      success: true,
+      sessionToken: nextSessionToken,
+      ...sessionLease(persistedSession)
+    });
+  } catch (error) {
+    console.error('Metaverse session rotation error:', error);
+    return res.status(503).json({ success: false, error: 'Metaverse session rotation is temporarily unavailable' });
   }
 });
 

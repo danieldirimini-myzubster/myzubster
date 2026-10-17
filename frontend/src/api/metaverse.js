@@ -268,6 +268,14 @@ export function syncMetaverse(sessionId, sessionToken, cursor = null) {
   });
 }
 
+export function rotateMetaverseSession(sessionId, sessionToken) {
+  return jsonRequest('/api/metaverse/session/rotate', {
+    method: 'POST',
+    headers: sessionHeaders(sessionToken),
+    body: JSON.stringify({ sessionId })
+  });
+}
+
 export function moveMetaversePlayer(sessionId, sessionToken, x, y) {
   return jsonRequest('/api/metaverse/move', {
     method: 'POST',
