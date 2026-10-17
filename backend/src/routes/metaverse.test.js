@@ -52,7 +52,8 @@ describe('MyZubster metaverse API', () => {
   test('moves a joined player inside world bounds', async () => {
     const response = await request(app)
       .post('/api/metaverse/move')
-      .send({ sessionId, sessionToken, x: 500, y: -50 })
+      .set('X-Metaverse-Session-Token', sessionToken)
+      .send({ sessionId, x: 500, y: -50 })
       .expect(200);
 
     expect(response.body.player.x).toBe(96);
@@ -62,12 +63,19 @@ describe('MyZubster metaverse API', () => {
   test('rejects attempts to control a public player id without its secret token', async () => {
     await request(app)
       .post('/api/metaverse/move')
-      .send({ sessionId, sessionToken: 'attacker-controlled-token', x: 4, y: 88 })
+      .set('X-Metaverse-Session-Token', 'attacker-controlled-token')
+      .send({ sessionId, x: 4, y: 88 })
+      .expect(401);
+
+    await request(app)
+      .post('/api/metaverse/move')
+      .send({ sessionId, x: 4, y: 88 })
       .expect(401);
 
     const syncResponse = await request(app)
       .post('/api/metaverse/sync')
-      .send({ sessionId, sessionToken })
+      .set('X-Metaverse-Session-Token', sessionToken)
+      .send({ sessionId })
       .expect(200);
     const player = syncResponse.body.players.find((candidate) => candidate.id === sessionId);
     expect(player).toMatchObject({ x: 96, y: 8 });
@@ -94,12 +102,14 @@ describe('MyZubster metaverse API', () => {
   test('shares presence and recent chat through the sync endpoint', async () => {
     const chatResponse = await request(app)
       .post('/api/metaverse/chat')
-      .send({ sessionId, sessionToken, text: 'Ciao Neon Plaza' })
+      .set('X-Metaverse-Session-Token', sessionToken)
+      .send({ sessionId, text: 'Ciao Neon Plaza' })
       .expect(201);
 
     const syncResponse = await request(app)
       .post('/api/metaverse/sync')
-      .send({ sessionId, sessionToken })
+      .set('X-Metaverse-Session-Token', sessionToken)
+      .send({ sessionId })
       .expect(200);
 
     expect(syncResponse.body.transport).toBe('ephemeral');
@@ -118,12 +128,14 @@ describe('MyZubster metaverse API', () => {
     await new Promise((resolve) => setTimeout(resolve, 750));
     await request(app)
       .post('/api/metaverse/chat')
-      .send({ sessionId, sessionToken, text: 'First message after cooldown' })
+      .set('X-Metaverse-Session-Token', sessionToken)
+      .send({ sessionId, text: 'First message after cooldown' })
       .expect(201);
 
     const response = await request(app)
       .post('/api/metaverse/chat')
-      .send({ sessionId, sessionToken, text: 'Immediate duplicate burst' })
+      .set('X-Metaverse-Session-Token', sessionToken)
+      .send({ sessionId, text: 'Immediate duplicate burst' })
       .expect(429);
 
     expect(response.headers['retry-after']).toBe('1');
@@ -137,14 +149,16 @@ describe('MyZubster metaverse API', () => {
   test('keeps an emote visible across a browser synchronization interval', async () => {
     await request(app)
       .post('/api/metaverse/emote')
-      .send({ sessionId, sessionToken, emote: 'wave' })
+      .set('X-Metaverse-Session-Token', sessionToken)
+      .send({ sessionId, emote: 'wave' })
       .expect(200);
 
     await new Promise((resolve) => setTimeout(resolve, 2100));
 
     const syncResponse = await request(app)
       .post('/api/metaverse/sync')
-      .send({ sessionId, sessionToken })
+      .set('X-Metaverse-Session-Token', sessionToken)
+      .send({ sessionId })
       .expect(200);
 
     expect(syncResponse.body.players.find((player) => player.id === sessionId)?.emote).toBe('wave');
@@ -152,7 +166,10 @@ describe('MyZubster metaverse API', () => {
 
   afterAll(async () => {
     if (sessionId && sessionToken) {
-      await request(app).post('/api/metaverse/leave').send({ sessionId, sessionToken });
+      await request(app)
+        .post('/api/metaverse/leave')
+        .set('X-Metaverse-Session-Token', sessionToken)
+        .send({ sessionId });
     }
   });
 });

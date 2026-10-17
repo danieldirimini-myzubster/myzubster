@@ -29,7 +29,7 @@ describe('authenticated metaverse UI wiring', () => {
     expect(pageSource).toContain('moveMetaversePlayer(sessionId, sessionToken');
     expect(pageSource).toContain('sendMetaverseChat(sessionId, sessionToken');
     expect(pageSource).not.toContain("localStorage.setItem('metaverse-session-token'");
-    expect(apiSource).toContain('JSON.stringify({ sessionId, sessionToken, x, y })');
+    expect(apiSource).toContain("return { 'X-Metaverse-Session-Token': sessionToken }");
   });
 
   test('renders account-linked characters as verified instead of guests', () => {

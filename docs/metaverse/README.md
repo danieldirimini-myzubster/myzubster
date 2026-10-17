@@ -1,4 +1,4 @@
-# MyZubster Metaverse — Neon Plaza v0.2
+# MyZubster Metaverse - Neon Plaza v0.3
 
 Neon Plaza is the first multiplayer social-space prototype for the MyZubster ecosystem.
 
@@ -34,13 +34,14 @@ technical work, tests and evidence
 
 The visual profile is **worldbuilding and navigation**, not proof of runtime activation or completed product functionality. Technical completion remains tied to code, tests, commits and other independently inspectable evidence.
 
-## What v0.2 includes
+## What v0.3 includes
 
 - public avatar/character creator;
 - five narrative archetypes: Guardian, Explorer, Maker, Chronicler and Scientist;
 - shared 2D/2.5D world called **Neon Plaza**;
 - keyboard and touch movement;
 - shared presence through MongoDB-backed HTTP synchronization, with legacy Server-Sent Events compatibility;
+- possession-bound session credentials for every guest and account-linked player;
 - public plaza chat;
 - proximity awareness (nearby characters);
 - emotes;
@@ -72,27 +73,23 @@ MyZubster backend /api/metaverse
 
 No additional realtime dependency is required for v0.1. Express handles commands and Server-Sent Events fan out world updates.
 
-## Identity boundary
+## Identity and session boundary
 
-v0.1 intentionally runs in `guest-unverified` identity mode.
+Guest profiles remain `guest-unverified`.
 
-A user may type a MYZ-ID for display, but the server **does not** convert that value into a verified identity claim. This prevents usernames or arbitrary strings from being treated as proof.
+A user may type a MYZ-ID for display, but the server **does not** convert that value into a verified identity claim. This prevents usernames or arbitrary strings from being treated as proof. Authenticated users may instead enter with an account-linked character resolved from the server-side MyZubster account; client identity claims are ignored.
 
-Future integration with the MyZubster Digital Civic Registry (MYZ-DCR) should add cryptographic challenge/signature verification before an avatar can display a verified identity badge.
+Every successful join creates a 256-bit random session token. The browser keeps that token only in React memory and sends it in the `X-Metaverse-Session-Token` header with state-changing world requests. The public session ID remains visible for multiplayer presence, while MongoDB stores only a SHA-256 digest of the secret token. Movement, synchronization, chat, emotes, the legacy event stream and leave requests fail when the token is missing or invalid. A public player ID alone therefore cannot control a player.
 
 ```text
-Guest profile
-    ↓
-public character
-    ↓
-Neon Plaza session
-
-Future:
-MYZ-DCR identity + signature
-    ↓
-verified session credential
-    ↓
-verified public character
+Guest profile -----------------> guest-unverified character
+Authenticated MyZubster user --> account-linked character
+                                      |
+                                      v
+                         possession-bound session token
+                                      |
+                                      v
+                              Neon Plaza actions
 ```
 
 ## Privacy and safety
@@ -103,12 +100,11 @@ The v0.1 server stores only temporary in-memory presence data. Chat is broadcast
 
 Before a broad public release, add:
 
-- authenticated account/session handling;
 - mute, block and report controls;
 - moderation and abuse tooling;
 - persistent database-backed world state where needed;
 - distributed presence storage for multiple backend instances;
-- anti-spam/rate-limit infrastructure beyond the prototype guards;
+- duplicate-message detection beyond the distributed rate limits;
 - privacy review and retention policy;
 - age-appropriate community rules.
 
@@ -170,9 +166,9 @@ network testing before a broad public release.
 
 ## Status boundary
 
-Operational today: shared presence, movement, public chat, emotes, proximity,
-persistent/account-linked characters, portals, session statistics and browser
-diagnostics.
+Operational today: shared presence, possession-bound sessions, movement, public
+chat, emotes, proximity, persistent/account-linked characters, distributed rate
+limits, portals, session statistics and browser diagnostics.
 
 Still planned: private rooms, moderation controls, durable contribution badges,
 3D rendering, WebXR, spatial audio, live IoT digital twins and portable identity.
