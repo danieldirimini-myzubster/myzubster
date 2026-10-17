@@ -81,6 +81,8 @@ A user may type a MYZ-ID for display, but the server **does not** convert that v
 
 Every successful join creates a 256-bit random session token. The browser keeps that token only in React memory and sends it in the `X-Metaverse-Session-Token` header with state-changing world requests. The public session ID remains visible for multiplayer presence, while MongoDB stores only a SHA-256 digest of the secret token. Movement, synchronization, chat, emotes, the legacy event stream and leave requests fail when the token is missing or invalid. A public player ID alone therefore cannot control a player.
 
+Join and sync responses expose the current lease expiry and the 90-second TTL without exposing credentials. Abandoned sessions are pruned on the next lookup even when MongoDB is unavailable, and the `/api/metaverse/session/rotate` endpoint replaces the possession token atomically. Once rotation succeeds, the previous token is rejected immediately while the public session identity remains stable.
+
 ```text
 Guest profile -----------------> guest-unverified character
 Authenticated MyZubster user --> account-linked character
