@@ -279,6 +279,13 @@ router.post('/chat', optionalAuthenticate, loadZorgaxAccess, async (req, res) =>
           featureAccess: { ...policy, webResearch: false, researchMode: 'DISABLED' },
           accessNotice
         });
+      } catch (error) {
+        if (controller.signal.aborted || error?.name === 'AbortError') {
+          console.warn('[zorgax-gateway] upstream timeout after 50s');
+          return res.status(504).json({ ok: false, error: 'Zorgax sta impiegando troppo tempo a rispondere. Riprova con una domanda piu breve.', code: 'ZORGAX_GATEWAY_TIMEOUT' });
+        }
+        console.error('[zorgax-gateway] upstream request failed', error?.name || 'Error');
+        return res.status(502).json({ ok: false, error: 'Connessione temporaneamente non disponibile. Riprova tra poco.', code: 'ZORGAX_GATEWAY_UNAVAILABLE' });
       } finally {
         clearTimeout(timeout);
       }
