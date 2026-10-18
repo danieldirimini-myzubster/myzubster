@@ -19,6 +19,7 @@ Active presence is stored in MongoDB so stateless Vercel instances can share the
 - Presence expires 90 seconds after the last successful activity.
 - Each sync or supported action renews the expiry.
 - Leaving deletes the active presence record.
+- Process-local fallback state prunes expired sessions before lookup or enumeration.
 - MongoDB has a TTL index for eventual cleanup.
 - Movement is represented only by the latest coordinates; the API does not maintain a movement-history feed.
 
@@ -28,6 +29,8 @@ Active presence is stored in MongoDB so stateless Vercel instances can share the
 - The token is returned only to the joining browser, kept in React memory rather than local storage, and sent in the `X-Metaverse-Session-Token` header rather than JSON request bodies.
 - MongoDB and the process-local presence cache store only the SHA-256 token digest.
 - Sync, movement, chat, emote, legacy event-stream and leave operations require proof of the token.
+- Join and sync responses disclose only the lease expiry and TTL, never the token digest.
+- Token rotation replaces the stored digest and invalidates the previous token immediately without changing the public session ID.
 - Token comparison uses a constant-time comparison after hashing the submitted value.
 - Public world and player responses never contain the raw token or its digest.
 

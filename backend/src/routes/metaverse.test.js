@@ -38,6 +38,8 @@ describe('MyZubster metaverse API', () => {
     expect(response.body.success).toBe(true);
     expect(sessionToken).toEqual(expect.any(String));
     expect(sessionToken.length).toBeGreaterThanOrEqual(32);
+    expect(response.body.sessionTtlSeconds).toBe(90);
+    expect(new Date(response.body.expiresAt).getTime()).toBeGreaterThan(Date.now());
     expect(response.body.player).not.toHaveProperty('sessionToken');
     expect(response.body.player).not.toHaveProperty('sessionTokenHash');
     expect(response.body.player.characterName).toBe('AERON-17');
@@ -79,6 +81,36 @@ describe('MyZubster metaverse API', () => {
       .expect(200);
     const player = syncResponse.body.players.find((candidate) => candidate.id === sessionId);
     expect(player).toMatchObject({ x: 96, y: 8 });
+  });
+
+  test('rotates the private credential and invalidates the previous token', async () => {
+    const previousToken = sessionToken;
+    const response = await request(app)
+      .post('/api/metaverse/session/rotate')
+      .set('X-Metaverse-Session-Token', previousToken)
+      .send({ sessionId })
+      .expect(200);
+
+    sessionToken = response.body.sessionToken;
+    expect(sessionToken).toEqual(expect.any(String));
+    expect(sessionToken).not.toBe(previousToken);
+    expect(response.body.sessionTtlSeconds).toBe(90);
+    expect(new Date(response.body.expiresAt).getTime()).toBeGreaterThan(Date.now());
+
+    await request(app)
+      .post('/api/metaverse/sync')
+      .set('X-Metaverse-Session-Token', previousToken)
+      .send({ sessionId })
+      .expect(401);
+
+    const syncResponse = await request(app)
+      .post('/api/metaverse/sync')
+      .set('X-Metaverse-Session-Token', sessionToken)
+      .send({ sessionId })
+      .expect(200);
+
+    expect(syncResponse.body.sessionTtlSeconds).toBe(90);
+    expect(new Date(syncResponse.body.expiresAt).getTime()).toBeGreaterThan(Date.now());
   });
 
   test('lists the active player and public character total in the world snapshot', async () => {
@@ -162,6 +194,35 @@ describe('MyZubster metaverse API', () => {
       .expect(200);
 
     expect(syncResponse.body.players.find((player) => player.id === sessionId)?.emote).toBe('wave');
+  });
+
+  test('prunes an abandoned in-memory session after its lease expires', async () => {
+    jest.useFakeTimers({ now: Date.now() });
+    try {
+      const joined = await request(app)
+        .post('/api/metaverse/join')
+        .send({
+          displayName: 'Temporary User',
+          characterName: 'LEASE-TEST',
+          archetype: 'explorer'
+        })
+        .expect(201);
+
+      jest.advanceTimersByTime(91 * 1000);
+
+      const world = await request(app)
+        .get('/api/metaverse/world')
+        .expect(200);
+      expect(world.body.players.some((player) => player.id === joined.body.sessionId)).toBe(false);
+
+      await request(app)
+        .post('/api/metaverse/sync')
+        .set('X-Metaverse-Session-Token', joined.body.sessionToken)
+        .send({ sessionId: joined.body.sessionId })
+        .expect(404);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   afterAll(async () => {
