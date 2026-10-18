@@ -234,6 +234,55 @@ router.post('/chat', optionalAuthenticate, loadZorgaxAccess, async (req, res) =>
     const safeRequestedLimit = Number.isFinite(requestedLimit) && requestedLimit > 0 ? requestedLimit : 5;
     const limit = policy.maxWebResults > 0 ? Math.min(safeRequestedLimit, policy.maxWebResults) : 1;
     const useWeb = requestedWeb && policy.webResearch;
+    // Vercel cannot access the VPS loopback Ollama. Use an authenticated, fixed-origin
+    // gateway only when explicitly configured; the VPS keeps its local Ollama path.
+    if (process.env.VERCEL === '1' && process.env.ZORGAX_GATEWAY_KEY) {
+      const message = String(req.body?.message || req.body?.prompt || '').trim();
+      if (!message || message.length > 12000) {
+        return res.status(400).json({ ok: false, error: 'Messaggio non valido o troppo lungo' });
+      }
+      const history = Array.isArray(req.body?.history)
+        ? req.body.history.slice(-8).filter(item => item && ['user', 'assistant'].includes(item.role))
+          .map(item => ({ role: item.role, content: String(item.content || item.message || '').slice(0, 2000) }))
+        : [];
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 50000);
+      try {
+        const upstream = await fetch('https://gateway.myzubster.com/api/zorgax/assistant/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Zorgax-Gateway-Key': process.env.ZORGAX_GATEWAY_KEY
+          },
+          body: JSON.stringify({ message, history, useWeb: false }),
+          signal: controller.signal
+        });
+        if (!upstream.ok) {
+          console.warn('[zorgax-gateway] upstream HTTP', upstream.status);
+          return res.status(502).json({ ok: false, error: 'Assistente temporaneamente non disponibile' });
+        }
+        const upstreamResult = await upstream.json();
+        if (!upstreamResult.ok) throw new Error('Invalid gateway response');
+        const accessNotice = requestedWeb
+          ? 'La ricerca web non è ancora disponibile attraverso il gateway privato.'
+          : null;
+        logFunnelEvent('zorgax_message_sent', req, { aiProvider: upstreamResult.ai_provider || null, aiModel: upstreamResult.ai_model || null });
+        return res.json({
+          ...upstreamResult,
+          privacy: {
+            ...upstreamResult.privacy,
+            processing_mode: 'REMOTE_VPS_OLLAMA',
+            transport: 'VERCEL_TO_MYZUBSTER_VPS_HTTPS',
+            external_egress_allowed: true
+          },
+          access: publicAccess(req.zorgaxAccess),
+          featureAccess: { ...policy, webResearch: false, researchMode: 'DISABLED' },
+          accessNotice
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
     const result = await answer({ message: req.body?.message || req.body?.prompt, useWeb, history: req.body?.history || [], limit });
     const accessNotice = requestedWeb && !policy.webResearch
       ? 'Accedi a MyZubster per abilitare la ricerca web. La risposta corrente usa solo l’assistente base.'
