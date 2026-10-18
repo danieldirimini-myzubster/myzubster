@@ -56,6 +56,15 @@ function appendPrivacyAudit(event, options = {}) {
   assertNoRawContent(event);
 
   const sanitized = sanitizeAuditEvent(event);
+
+  // Vercel's serverless filesystem does not allow writing to /var/log.
+  // Emit only sanitized audit metadata to platform logs by default.
+  // Durable audit retention requires a separately configured storage sink.
+  if (process.env.VERCEL === '1' && !options.path && !process.env.ZORGAX_PRIVACY_AUDIT_PATH) {
+    console.info('[zorgax-privacy-audit]', JSON.stringify(sanitized));
+    return sanitized;
+  }
+
   const auditPath = String(options.path || getAuditPath()).trim();
 
   if (!auditPath) {
