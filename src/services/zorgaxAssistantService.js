@@ -210,7 +210,9 @@ async function answer({
     }
 
     const localResult = await askLocalOllama({
-      message: buildAssistantPrompt(text, []),
+      // Keep product instructions in the system role, not embedded as user text.
+      system: buildAssistantPrompt('', []),
+      message: text,
       history
     });
 
