@@ -42,7 +42,7 @@ describe('Neon Plaza session ownership', () => {
     jest.restoreAllMocks();
   });
 
-  test('sends the private session token with every mutable world request', async () => {
+  test('sends the private session token in a header, never in a JSON body', async () => {
     await syncMetaverse('public-id', 'private-token', 'cursor');
     await moveMetaversePlayer('public-id', 'private-token', 10, 20);
     await sendMetaverseChat('public-id', 'private-token', 'hello');
@@ -51,10 +51,11 @@ describe('Neon Plaza session ownership', () => {
 
     expect(global.fetch).toHaveBeenCalledTimes(5);
     for (const [, options] of global.fetch.mock.calls) {
-      expect(JSON.parse(options.body)).toMatchObject({
-        sessionId: 'public-id',
-        sessionToken: 'private-token'
+      expect(options.headers).toMatchObject({
+        'X-Metaverse-Session-Token': 'private-token'
       });
+      expect(JSON.parse(options.body)).toMatchObject({ sessionId: 'public-id' });
+      expect(JSON.parse(options.body)).not.toHaveProperty('sessionToken');
     }
   });
 });

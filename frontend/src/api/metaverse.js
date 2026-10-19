@@ -8,6 +8,10 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function sessionHeaders(sessionToken) {
+  return { 'X-Metaverse-Session-Token': sessionToken };
+}
+
 async function jsonRequest(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
@@ -259,34 +263,47 @@ export function getMetaverseWorld() {
 export function syncMetaverse(sessionId, sessionToken, cursor = null) {
   return jsonRequest('/api/metaverse/sync', {
     method: 'POST',
-    body: JSON.stringify({ sessionId, sessionToken, cursor })
+    headers: sessionHeaders(sessionToken),
+    body: JSON.stringify({ sessionId, cursor })
+  });
+}
+
+export function rotateMetaverseSession(sessionId, sessionToken) {
+  return jsonRequest('/api/metaverse/session/rotate', {
+    method: 'POST',
+    headers: sessionHeaders(sessionToken),
+    body: JSON.stringify({ sessionId })
   });
 }
 
 export function moveMetaversePlayer(sessionId, sessionToken, x, y) {
   return jsonRequest('/api/metaverse/move', {
     method: 'POST',
-    body: JSON.stringify({ sessionId, sessionToken, x, y })
+    headers: sessionHeaders(sessionToken),
+    body: JSON.stringify({ sessionId, x, y })
   });
 }
 
 export function sendMetaverseChat(sessionId, sessionToken, text) {
   return jsonRequest('/api/metaverse/chat', {
     method: 'POST',
-    body: JSON.stringify({ sessionId, sessionToken, text })
+    headers: sessionHeaders(sessionToken),
+    body: JSON.stringify({ sessionId, text })
   });
 }
 
 export function sendMetaverseEmote(sessionId, sessionToken, emote) {
   return jsonRequest('/api/metaverse/emote', {
     method: 'POST',
-    body: JSON.stringify({ sessionId, sessionToken, emote })
+    headers: sessionHeaders(sessionToken),
+    body: JSON.stringify({ sessionId, emote })
   });
 }
 
 export function leaveMetaverse(sessionId, sessionToken) {
   return jsonRequest('/api/metaverse/leave', {
     method: 'POST',
-    body: JSON.stringify({ sessionId, sessionToken })
+    headers: sessionHeaders(sessionToken),
+    body: JSON.stringify({ sessionId })
   });
 }

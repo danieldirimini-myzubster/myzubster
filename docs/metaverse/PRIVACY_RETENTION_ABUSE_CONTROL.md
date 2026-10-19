@@ -19,8 +19,20 @@ Active presence is stored in MongoDB so stateless Vercel instances can share the
 - Presence expires 90 seconds after the last successful activity.
 - Each sync or supported action renews the expiry.
 - Leaving deletes the active presence record.
+- Process-local fallback state prunes expired sessions before lookup or enumeration.
 - MongoDB has a TTL index for eventual cleanup.
 - Movement is represented only by the latest coordinates; the API does not maintain a movement-history feed.
+
+### Session ownership
+
+- A join response returns a public session ID and a separate 256-bit random session token.
+- The token is returned only to the joining browser, kept in React memory rather than local storage, and sent in the `X-Metaverse-Session-Token` header rather than JSON request bodies.
+- MongoDB and the process-local presence cache store only the SHA-256 token digest.
+- Sync, movement, chat, emote, legacy event-stream and leave operations require proof of the token.
+- Join and sync responses disclose only the lease expiry and TTL, never the token digest.
+- Token rotation replaces the stored digest and invalidates the previous token immediately without changing the public session ID.
+- Token comparison uses a constant-time comparison after hashing the submitted value.
+- Public world and player responses never contain the raw token or its digest.
 
 ### Chat
 
@@ -56,6 +68,7 @@ Logs must not include request bodies, query strings, chat text, authorization he
 - Server-side allowlists for archetypes and emotes.
 - Input sanitization and bounded field lengths.
 - Session-based minimum intervals for movement, chat and emotes.
+- Possession checks on every session mutation prevent control by public player ID alone.
 - MongoDB-backed fixed-window limits for join, sync, chat and emote mutations.
 - Rate-limit keys are HMAC digests; raw network addresses, account IDs and session IDs are not stored in throttle buckets.
 - Expired throttle buckets are removed by a MongoDB TTL index.
@@ -81,7 +94,7 @@ Before the Metaverse is promoted beyond the current MVP baseline, implement and 
 The distributed limiter uses MongoDB in production. The process-local fallback exists only for isolated tests and degraded ephemeral development; a connected MongoDB failure is treated as a service error rather than silently bypassing the policy.
 Production derives the HMAC key from `METAVERSE_RATE_LIMIT_SECRET`, `REALTIME_TOKEN_SECRET` or `JWT_SECRET` and fails closed when none is configured. Forwarded network addresses are accepted only on Vercel or when `METAVERSE_TRUST_PROXY=1` explicitly marks the deployment proxy as trusted.
 
-Until these controls exist, the project must not claim that automated moderation, distributed abuse prevention or private chat is available.
+Until these controls exist, the project must not claim that automated moderation or private chat is available. Distributed rate limiting and possession-bound sessions are active controls, not a complete moderation system.
 
 ## Deletion and incident handling
 
@@ -95,6 +108,8 @@ During a safety incident, operators should preserve only the minimum evidence ne
 - Confirm the health endpoint reports the configured retention values without exposing player or message content.
 - Exercise two normal accounts and one synthetic abuse scenario.
 - Verify 429 responses for configured limits.
+- Verify missing and invalid session tokens receive `401` and cannot change or delete another presence.
+- Verify public snapshots and logs never expose raw session tokens or token digests.
 - Verify blocked content is consistently filtered from chat and presence views.
 - Inspect production logs for accidental identifiers or message content.
 - Record the test date, deployment commit and reviewer in MYZ-41.
