@@ -1,5 +1,6 @@
 const express = require("express");
 const crypto = require("crypto");
+const mongoose = require("mongoose");
 const { authenticate, isAdmin } = require("../../../src/middleware/auth");
 const {
   mintSocketToken,
@@ -10,6 +11,21 @@ const {
 } = require("../services/realtimeObservability");
 
 const router = express.Router();
+
+router.get("/health", (_req, res) => {
+  const databaseReady = mongoose.connection.readyState === 1;
+  res.set("Cache-Control", "no-store");
+  return res.status(databaseReady ? 200 : 503).json({
+    success: databaseReady,
+    service: "myzubster-realtime",
+    status: databaseReady ? "ready" : "degraded",
+    checks: {
+      router: "ready",
+      mongodb: databaseReady ? "connected" : "disconnected",
+    },
+    timestamp: new Date().toISOString(),
+  });
+});
 
 router.post("/token", authenticate, (req, res) => {
   try {
