@@ -1,5 +1,6 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
 const request = require("supertest");
 const router = require("./realtime");
 const {
@@ -13,10 +14,45 @@ describe("realtime operational routes", () => {
 
   beforeEach(() => {
     process.env.JWT_SECRET = secret;
+    mongoose.connection.readyState = 1;
     resetRealtimeObservability();
     app = express();
     app.use(express.json());
     app.use("/api/realtime", router);
+  });
+
+  afterEach(() => {
+    mongoose.connection.readyState = 0;
+  });
+
+  test("reports public readiness without exposing sensitive data", async () => {
+    const response = await request(app).get("/api/realtime/health");
+
+    expect(response.status).toBe(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.body).toMatchObject({
+      success: true,
+      service: "myzubster-realtime",
+      status: "ready",
+      checks: { router: "ready", mongodb: "connected" },
+    });
+    expect(response.body.timestamp).toEqual(expect.any(String));
+    expect(JSON.stringify(response.body)).not.toContain(secret);
+  });
+
+  test("fails readiness when durable storage is disconnected", async () => {
+    mongoose.connection.readyState = 0;
+
+    const response = await request(app).get("/api/realtime/health");
+
+    expect(response.status).toBe(503);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.body).toMatchObject({
+      success: false,
+      service: "myzubster-realtime",
+      status: "degraded",
+      checks: { router: "ready", mongodb: "disconnected" },
+    });
   });
 
   test("exposes non-cacheable aggregate metrics to administrators", async () => {
