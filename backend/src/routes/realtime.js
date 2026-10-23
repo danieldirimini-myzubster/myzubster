@@ -9,19 +9,23 @@ const {
 const {
   realtimeMetricsSnapshot,
 } = require("../services/realtimeObservability");
+const { redisReadiness } = require("../services/presenceStore");
 
 const router = express.Router();
 
-router.get("/health", (_req, res) => {
+router.get("/health", async (_req, res) => {
   const databaseReady = mongoose.connection.readyState === 1;
+  const redis = await redisReadiness();
+  const serviceReady = databaseReady && redis.ready;
   res.set("Cache-Control", "no-store");
-  return res.status(databaseReady ? 200 : 503).json({
-    success: databaseReady,
+  return res.status(serviceReady ? 200 : 503).json({
+    success: serviceReady,
     service: "myzubster-realtime",
-    status: databaseReady ? "ready" : "degraded",
+    status: serviceReady ? "ready" : "degraded",
     checks: {
       router: "ready",
       mongodb: databaseReady ? "connected" : "disconnected",
+      redis: redis.status,
     },
     timestamp: new Date().toISOString(),
   });
