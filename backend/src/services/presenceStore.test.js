@@ -84,4 +84,43 @@ describe("presenceStore Redis failure behavior", () => {
     );
     store.resetPresenceStoreForTests();
   });
+
+  test("reports Redis ready after a successful ping", async () => {
+    const client = {
+      isReady: true,
+      isOpen: false,
+      on: jest.fn(),
+      connect: jest.fn().mockResolvedValue(undefined),
+      ping: jest.fn().mockResolvedValue("PONG"),
+    };
+    createClient.mockReturnValue(client);
+    const store = require("./presenceStore");
+
+    await expect(store.redisReadiness()).resolves.toEqual({
+      ready: true,
+      status: "connected",
+    });
+    expect(client.ping).toHaveBeenCalledTimes(1);
+    store.resetPresenceStoreForTests();
+  });
+
+  test("reports Redis disconnected when ping fails", async () => {
+    const client = {
+      isReady: true,
+      isOpen: false,
+      on: jest.fn(),
+      connect: jest.fn().mockResolvedValue(undefined),
+      ping: jest.fn().mockRejectedValue(new Error("redis ping failed")),
+    };
+    createClient.mockReturnValue(client);
+    const store = require("./presenceStore");
+
+    await expect(store.redisReadiness()).resolves.toEqual({
+      ready: false,
+      status: "disconnected",
+    });
+    expect(realtimeMetricsSnapshot().counters.redisFailures).toBe(1);
+    store.resetPresenceStoreForTests();
+  });
+
 });
