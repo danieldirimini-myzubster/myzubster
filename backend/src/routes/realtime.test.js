@@ -1,11 +1,17 @@
+jest.mock("../services/presenceStore", () => ({
+  redisReadiness: jest.fn(),
+}));
+
 const express = require("express");
 const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
 const request = require("supertest");
 const router = require("./realtime");
 const {
   incrementCounter,
   resetRealtimeObservability,
 } = require("../services/realtimeObservability");
+const { redisReadiness } = require("../services/presenceStore");
 
 describe("realtime operational routes", () => {
   const secret = "test-realtime-admin-secret";
@@ -13,10 +19,73 @@ describe("realtime operational routes", () => {
 
   beforeEach(() => {
     process.env.JWT_SECRET = secret;
+    mongoose.connection.readyState = 1;
+    redisReadiness.mockResolvedValue({ ready: true, status: "connected" });
     resetRealtimeObservability();
     app = express();
     app.use(express.json());
     app.use("/api/realtime", router);
+  });
+
+  afterEach(() => {
+    mongoose.connection.readyState = 0;
+  });
+
+  test("reports public readiness without exposing sensitive data", async () => {
+    const response = await request(app).get("/api/realtime/health");
+
+    expect(response.status).toBe(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.body).toMatchObject({
+      success: true,
+      service: "myzubster-realtime",
+      status: "ready",
+      checks: {
+        router: "ready",
+        mongodb: "connected",
+        redis: "connected",
+      },
+    });
+    expect(response.body.timestamp).toEqual(expect.any(String));
+    expect(JSON.stringify(response.body)).not.toContain(secret);
+  });
+
+  test("fails readiness when durable storage is disconnected", async () => {
+    mongoose.connection.readyState = 0;
+
+    const response = await request(app).get("/api/realtime/health");
+
+    expect(response.status).toBe(503);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.body).toMatchObject({
+      success: false,
+      service: "myzubster-realtime",
+      status: "degraded",
+      checks: {
+        router: "ready",
+        mongodb: "disconnected",
+        redis: "connected",
+      },
+    });
+  });
+
+  test("fails readiness when Redis is disconnected", async () => {
+    redisReadiness.mockResolvedValue({ ready: false, status: "disconnected" });
+
+    const response = await request(app).get("/api/realtime/health");
+
+    expect(response.status).toBe(503);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.body).toMatchObject({
+      success: false,
+      service: "myzubster-realtime",
+      status: "degraded",
+      checks: {
+        router: "ready",
+        mongodb: "connected",
+        redis: "disconnected",
+      },
+    });
   });
 
   test("exposes non-cacheable aggregate metrics to administrators", async () => {

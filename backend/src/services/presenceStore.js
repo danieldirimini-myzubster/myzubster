@@ -58,6 +58,24 @@ async function getRedis() {
   return redisInit;
 }
 
+async function redisReadiness() {
+  if (!redisConfigured()) {
+    return { ready: false, status: "not_configured" };
+  }
+  const client = await getRedis();
+  if (!client) {
+    return { ready: false, status: "disconnected" };
+  }
+  try {
+    await client.ping();
+    return { ready: true, status: "connected" };
+  } catch (error) {
+    noteRedisFailure("health", error);
+    invalidateRedisClient(client);
+    return { ready: false, status: "disconnected" };
+  }
+}
+
 function member(userId, connectionId) {
   return `${String(userId)}|${String(connectionId)}`;
 }
@@ -265,5 +283,6 @@ module.exports = {
   list,
   mode,
   redisConfigured,
+  redisReadiness,
   resetPresenceStoreForTests,
 };
