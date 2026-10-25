@@ -40,7 +40,7 @@ jobs:
 
           while [ "$attempt" -le "$max_attempts" ]; do
             echo "npm audit attempt $attempt of $max_attempts"
-            npm audit --audit-level=high --json > npm-audit.json
+            npm audit --omit=dev --audit-level=high --json > npm-audit.json
             status=$?
 
             if node -e "
@@ -64,10 +64,27 @@ jobs:
           echo "npm audit service remained unavailable after $max_attempts attempts." >&2
           exit 2
 
+      - name: Audit all dependencies (development included)
+        shell: bash
+        run: |
+          set +e
+          npm audit --json > npm-audit-full.json
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "::warning title=Development dependency audit::Full dependency audit reported vulnerabilities. Review npm-audit-full.json."
+          fi
+          if ! node -e "const a=require('./npm-audit-full.json'); process.exit(a.metadata && a.metadata.vulnerabilities ? 0 : 1)"; then
+            echo "::error::Full audit did not return valid vulnerability metadata."
+            exit 2
+          fi
+
       - name: Upload audit report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: npm-audit-report
-          path: npm-audit.json
+          path: |
+            npm-audit.json
+            npm-audit-full.json
           if-no-files-found: ignore
