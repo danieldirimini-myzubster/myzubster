@@ -67,8 +67,10 @@ jobs:
       - name: Audit all dependencies (development included)
         shell: bash
         run: |
+          set +e
           npm audit --json > npm-audit-full.json
           status=$?
+          set -e
           if [ "$status" -ne 0 ]; then
             echo "::warning title=Development dependency audit::Full dependency audit reported vulnerabilities. Review npm-audit-full.json."
           fi
